@@ -28,11 +28,13 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",
+    "form-data": "^4.0.5",
     "html2pdf.js": "^0.14.0",
     "jspdf": "^4.0.0",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
     "lucide": "^0.562.0",
+    "node-fetch": "^3.3.2",
     "qrcode": "^1.5.4"
   }
 }

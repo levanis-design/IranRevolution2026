@@ -19,16 +19,37 @@ async function backup() {
   // eslint-disable-next-line no-console
   console.log('📦 Starting backup from Supabase...')
   
-  // Fetch all records from the memorials table
-  const { data, error } = await supabase
-    .from('memorials')
-    .select('*')
+  // Fetch all records from the memorials table with pagination
+  let allData: any[] = []
+  let page = 0
+  const pageSize = 1000
+  let hasMore = true
 
-  if (error) {
-    // eslint-disable-next-line no-console
-    console.error('❌ Error fetching data:', error.message)
-    return
+  while (hasMore) {
+    console.log(`Fetching page ${page + 1}...`)
+    const { data, error } = await supabase
+      .from('memorials')
+      .select('*')
+      .range(page * pageSize, (page + 1) * pageSize - 1)
+
+    if (error) {
+      console.error('❌ Error fetching data:', error.message)
+      return
+    }
+
+    if (data && data.length > 0) {
+      allData = [...allData, ...data]
+      if (data.length < pageSize) {
+        hasMore = false
+      } else {
+        page++
+      }
+    } else {
+      hasMore = false
+    }
   }
+
+  const data = allData
 
   // Ensure backup directory exists
   const backupDir = path.join(process.cwd(), 'backups')
