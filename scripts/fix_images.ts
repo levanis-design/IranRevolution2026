@@ -1,7 +1,4 @@
 import { createClient } from '@supabase/supabase-js'
-import fs from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
 import { extractSocialImage } from '../src/modules/imageExtractor.ts'
 
 // Load environment variables
@@ -32,7 +29,7 @@ async function ensureBucket() {
   const bucket = buckets.find(b => b.name === BUCKET_NAME)
   if (!bucket) {
     console.log(`Bucket ${BUCKET_NAME} not found. Attempting to create...`)
-    const { data, error: createError } = await supabase.storage.createBucket(BUCKET_NAME, {
+    const { error: createError } = await supabase.storage.createBucket(BUCKET_NAME, {
       public: true
     })
     if (createError) {
@@ -81,7 +78,7 @@ async function uploadImage(buffer: Buffer, originalUrl: string): Promise<string 
     const ext = getExtension(originalUrl);
     const filename = `${crypto.randomUUID()}.${ext}`
     
-    const { data, error } = await supabase.storage
+  const { error } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(filename, buffer, {
         contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
@@ -217,30 +214,28 @@ async function fixImages() {
       } else {
         // If primary download failed, try fallback extraction
         // We do this even if it was a broken supabase URL, because if we can't download it, we need to find the original source.
-        if (true) {
-            console.log(`Download failed. Attempting fallback extraction...`)
-            const sourceUrl = media.xPost || media.telegramPost || 
-                            (memorial.source_links && memorial.source_links.find((r: any) => r.url.includes('instagram.com'))?.url)
+        console.log(`Download failed. Attempting fallback extraction...`)
+        const sourceUrl = media.xPost || media.telegramPost || 
+                        (memorial.source_links && memorial.source_links.find((r: any) => r.url.includes('instagram.com'))?.url)
+        
+        if (sourceUrl) {
+            console.log(`Re-extracting from: ${sourceUrl}`)
+            // Add a small delay to respect rate limits
+            await new Promise(resolve => setTimeout(resolve, 2000));
             
-            if (sourceUrl) {
-                console.log(`Re-extracting from: ${sourceUrl}`)
-                // Add a small delay to respect rate limits
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                
-                const newExtractedUrl = await extractSocialImage(sourceUrl)
-                if (newExtractedUrl && newExtractedUrl !== photoUrl) {
-                     const newBuffer = await downloadImage(newExtractedUrl)
-                     if (newBuffer) {
-                         const newUrl = await uploadImage(newBuffer, newExtractedUrl)
-                         if (newUrl) {
-                            const updatedMedia = { ...media, photo: newUrl }
-                            await supabase.from('memorials').update({ media: updatedMedia }).eq('id', memorial.id)
-                            console.log(`✅ Updated ${memorial.name} (via fallback) -> ${newUrl}`)
-                            updatedCount++
-                            continue;
-                         }
+            const newExtractedUrl = await extractSocialImage(sourceUrl)
+            if (newExtractedUrl && newExtractedUrl !== photoUrl) {
+                 const newBuffer = await downloadImage(newExtractedUrl)
+                 if (newBuffer) {
+                     const newUrl = await uploadImage(newBuffer, newExtractedUrl)
+                     if (newUrl) {
+                        const updatedMedia = { ...media, photo: newUrl }
+                        await supabase.from('memorials').update({ media: updatedMedia }).eq('id', memorial.id)
+                        console.log(`✅ Updated ${memorial.name} (via fallback) -> ${newUrl}`)
+                        updatedCount++
+                        continue;
                      }
-                }
+                 }
             }
         }
         

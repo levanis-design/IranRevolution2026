@@ -9,5 +9,14 @@
   "rules": {
     "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
     "no-console": ["warn", { "allow": ["error"] }]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["scripts/**/*.ts", "backup_data.ts"],
+      "rules": {
+        "no-console": "off",
+        "@typescript-eslint/no-explicit-any": "off"
+      }
+    }
+  ]
 }

@@ -32,7 +32,7 @@ async function checkAndFixBucket() {
 
   if (!bucket.public) {
     console.log(`⚠️ Bucket is PRIVATE. Updating to PUBLIC...`)
-    const { data, error: updateError } = await supabase.storage.updateBucket(BUCKET_NAME, {
+    const { error: updateError } = await supabase.storage.updateBucket(BUCKET_NAME, {
       public: true
     })
     

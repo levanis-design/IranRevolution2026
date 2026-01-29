@@ -48,10 +48,15 @@ async function uploadToImgBB(buffer: Buffer, name: string): Promise<string | nul
       body: formData
     })
 
-    const result = await response.json()
+    interface ImgBBResponse {
+      success: boolean
+      data?: { url: string }
+      error?: { message?: string }
+    }
+    const result = (await response.json()) as ImgBBResponse
     
     if (result.success) {
-      return result.data.url
+      return result.data?.url || null
     } else {
       console.error('ImgBB upload error:', result.error?.message || 'Unknown error')
       return null
