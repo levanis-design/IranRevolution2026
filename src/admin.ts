@@ -672,6 +672,28 @@ document.getElementById('city')?.addEventListener('input', (e) => {
   checkDuplicate(name, (e.target as HTMLInputElement).value, name_fa)
 })
 
+document.getElementById('references')?.addEventListener('input', (e) => {
+  const text = (e.target as HTMLTextAreaElement).value
+  const xPostInput = document.getElementById('xPost') as HTMLInputElement
+  
+  // Only autofill if currently empty or if we are likely typing/extending the same URL
+  const currentVal = xPostInput.value.trim()
+  
+  const lines = text.split('\n')
+  for (const line of lines) {
+    const parts = line.split('|')
+    if (parts.length >= 2) {
+      const url = parts[1].trim()
+      if (url.includes('x.com') || url.includes('twitter.com') || url.includes('instagram.com') || url.includes('t.me/')) {
+        if (!currentVal || url.startsWith(currentVal) || currentVal.startsWith(url)) {
+          xPostInput.value = url
+        }
+        break
+      }
+    }
+  }
+})
+
 searchSubmissions.addEventListener('input', renderSubmissions)
 searchMemorials.addEventListener('input', renderVerified)
 sortSubmissions.addEventListener('change', renderSubmissions)
