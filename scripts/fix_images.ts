@@ -166,6 +166,8 @@ async function fixImages() {
        ((photoUrl.includes('telegram.org') || 
         photoUrl.includes('instagram.com') || 
         photoUrl.includes('twimg.com') ||
+        photoUrl.includes('ibb.co') ||
+        photoUrl.includes('imgbb.com') ||
         photoUrl.includes('fbcdn.net')) && !isSupabase) || isBrokenSupabase) { 
       
       console.log(`Processing ${memorial.name}: ${isBrokenSupabase ? 'Broken Supabase URL' : 'Hotlinked URL'}`)
