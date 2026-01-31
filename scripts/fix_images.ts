@@ -168,23 +168,30 @@ async function fixImages() {
         photoUrl.includes('twimg.com') ||
         photoUrl.includes('ibb.co') ||
         photoUrl.includes('imgbb.com') ||
+        photoUrl.includes('telesco.pe') ||
         photoUrl.includes('fbcdn.net')) && !isSupabase) || isBrokenSupabase) { 
       
       console.log(`Processing ${memorial.name}: ${isBrokenSupabase ? 'Broken Supabase URL' : 'Hotlinked URL'}`)
       
       let buffer = await downloadImage(photoUrl)
       
-      // If download failed and it was a broken supabase url, we might need to fallback to re-extraction
-      if (!buffer && isBrokenSupabase) {
-         console.log(`Failed to download broken Supabase URL. Attempting re-extraction from source...`)
+      // If download failed (or returned empty), attempt re-extraction from source
+      if (!buffer) {
+         console.log(`Download failed for ${photoUrl}. Attempting re-extraction from source...`)
          const sourceUrl = media.xPost || media.telegramPost || 
-                         (memorial.source_links && memorial.source_links.find((r: any) => r.url.includes('instagram.com'))?.url)
+                         (memorial.source_links && memorial.source_links.find((r: any) => r.url.includes('instagram.com') || r.url.includes('t.me/'))?.url)
+         
          if (sourceUrl) {
             console.log(`Re-extracting from: ${sourceUrl}`)
             const newExtractedUrl = await extractSocialImage(sourceUrl)
             if (newExtractedUrl && newExtractedUrl !== photoUrl) {
+                console.log(`New URL extracted: ${newExtractedUrl}`)
                 buffer = await downloadImage(newExtractedUrl)
+            } else {
+                console.log('Failed to extract new URL or URL is same.')
             }
+         } else {
+             console.log('No source URL found for re-extraction.')
          }
       }
 

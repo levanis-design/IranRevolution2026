@@ -1,5 +1,48 @@
 const OPENROUTER_API_KEY = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env.VITE_OPENROUTER_API_KEY : process.env.VITE_OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = (typeof import.meta !== 'undefined' && import.meta.env) ? (import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free') : (process.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free');
+const TELEGRAM_BOT_TOKEN = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env.VITE_TELEGRAM_BOT_TOKEN : process.env.Telegram_Bot_Token;
+
+import { uploadImageToSupabase } from './supabase';
+
+/**
+ * Fetches an image from Telegram using the Bot API if possible, or falls back to scraping.
+ * Then uploads the image to Supabase.
+ */
+async function fetchAndUploadTelegramImage(url: string): Promise<string | null> {
+  if (!url || !url.includes('t.me/')) return null;
+
+  try {
+    // Step 1: Get a direct image URL (telesco.pe) by scraping the post page
+    // We do this because Bot API cannot easily get historical messages without admin rights
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const html = await response.text();
+    
+    // Find og:image (usually a telesco.pe link)
+    const ogImageMatch = html.match(/<meta property="og:image" content="(https:\/\/cdn\d+\.telesco\.pe\/file\/[^"]+)"/);
+    let imageUrl = ogImageMatch ? ogImageMatch[1] : null;
+    
+    if (!imageUrl) {
+      const telescoMatch = html.match(/https:\/\/cdn\d+\.telesco\.pe\/file\/[^"'\s)]+/);
+      imageUrl = telescoMatch ? telescoMatch[0] : null;
+    }
+
+    if (!imageUrl) return null;
+
+    // Step 2: Download the image
+    const imgResponse = await fetch(imageUrl, {
+      headers: { 'Referer': 'https://t.me/' }
+    });
+    if (!imgResponse.ok) return null;
+    const buffer = await imgResponse.arrayBuffer();
+
+    // Step 3: Upload to Supabase
+    return await uploadImageToSupabase(buffer, imageUrl);
+  } catch (error) {
+    console.error('Error in fetchAndUploadTelegramImage:', error);
+    return null;
+  }
+}
 
 /**
  * Extracts the primary image URL from an Instagram post using Jina Reader and OpenRouter.
@@ -104,8 +147,20 @@ export async function extractTelegramImage(url: string): Promise<string | null> 
     return null;
   }
 
+  // Attempt to fetch, download and upload to Supabase immediately
+  // This avoids broken telesco.pe links in the database
+  const supabaseUrl = await fetchAndUploadTelegramImage(url);
+  if (supabaseUrl) return supabaseUrl;
+
   try {
-    const readerUrl = `https://r.jina.ai/${url}`;
+    // Use embed mode for cleaner content and better separation of profile vs post content
+    // Convert https://t.me/s/channel/123 -> https://t.me/channel/123?embed=1
+    let targetUrl = url.replace('/s/', '/');
+    if (!targetUrl.includes('embed=1')) {
+      targetUrl = targetUrl.includes('?') ? `${targetUrl}&embed=1` : `${targetUrl}?embed=1`;
+    }
+
+    const readerUrl = `https://r.jina.ai/${targetUrl}`;
     
     const response = await fetch(readerUrl, {
       headers: {
@@ -115,29 +170,59 @@ export async function extractTelegramImage(url: string): Promise<string | null> 
       }
     });
 
-    if (!response.ok) return null;
-    const content = await response.text();
-    
-    // Telegram images in Jina Reader usually appear in markdown as ![image](url)
-    // We want the first one that looks like a post image
-    const imgRegex = /!\[.*?\]\((https:\/\/cdn[0-9]\.cdn-telegram\.org\/[^)]*?)\)/g;
-    const matches = [...content.matchAll(imgRegex)];
-    if (matches.length > 0) {
-      return matches[0][1];
+    if (!response.ok) {
+      console.error(`Jina Reader API error: ${response.status} ${response.statusText}`);
+      return null;
     }
 
-    // Fallback: any image that isn't a UI element
-    const genericImgRegex = /!\[.*?\]\((https:\/\/[^)]*?)\)/g;
-    const genericMatches = [...content.matchAll(genericImgRegex)];
-    for (const match of genericMatches) {
-      const imgUrl = match[1];
-      if (!imgUrl.includes('logo') && !imgUrl.includes('icon') && !imgUrl.includes('avatar')) {
-        return imgUrl;
+    const content = await response.text();
+    
+    // Find all images
+    // Regex for markdown images: ![alt](url)
+    const imgRegex = /!\[.*?\]\((https:\/\/[^)]*?)\)/g;
+    const matches = [...content.matchAll(imgRegex)];
+    
+    if (matches.length === 0) {
+      return null;
+    }
+
+    // Frequency analysis to filter out profile pictures (which usually appear multiple times in header/footer)
+    const urlCounts = new Map<string, number>();
+    const uniqueUrls: string[] = [];
+
+    for (const match of matches) {
+      // Clean URL (remove backslashes often added by Jina/Markdown escaping)
+      const rawUrl = match[1].replace(/\\_/g, '_');
+      // Normalize URL (sometimes parameters differ?) - usually exact match is enough
+      
+      urlCounts.set(rawUrl, (urlCounts.get(rawUrl) || 0) + 1);
+      if (!uniqueUrls.includes(rawUrl)) {
+        uniqueUrls.push(rawUrl);
       }
     }
-    
+
+    // Filter logic:
+    // 1. Prefer images that appear exactly ONCE (content images).
+    // 2. Profile pics usually appear 2+ times (header + footer).
+    // 3. Skip images that look like UI icons (logo, icon, avatar - though avatar might be in name).
+
+    const contentImages = uniqueUrls.filter(u => {
+      const count = urlCounts.get(u) || 0;
+      const isIcon = u.includes('logo') || u.includes('icon') || u.includes('assets');
+      return count === 1 && !isIcon;
+    });
+
+    if (contentImages.length > 0) {
+      // Return the first unique content image
+      return contentImages[0];
+    }
+
+    // If no unique images found, and we only have repeated images, assume they are profile pics and return null
+    // strict mode: do not return profile pic
     return null;
+
   } catch (error) {
+    console.error('Error extracting Telegram image:', error);
     return null;
   }
 }
