@@ -91,12 +91,16 @@ export async function extractMemorialData(url: string, providedContent?: string)
             2. The "name_fa", "city_fa", "location_fa", and "bio_fa" fields MUST be in Persian (Farsi). If the source text is in English, translate these to Persian.
             3. Ensure names are spelled correctly in both languages.
             
+            DATE CORRECTION RULES:
+            1. If the text mentions "December 2025" as the date of death/incident, change it to "January 2026" (specifically around 2026-01-09).
+            2. If the date cannot be explicitly extracted from the text, use the DEFAULT date: "2026-01-09".
+
             Return ONLY a valid JSON array of objects with the following fields:
             - name: Full Name (in English)
             - name_fa: Full Name (in Persian)
             - city: City name (in English)
             - city_fa: City name (in Persian)
-            - date: YYYY-MM-DD format
+            - date: YYYY-MM-DD format (Default: "2026-01-09" if not found)
             - location: Specific location or neighborhood (in English)
             - location_fa: Specific location or neighborhood (in Persian)
             - bio: Brief biography (max 200 characters, in English)
