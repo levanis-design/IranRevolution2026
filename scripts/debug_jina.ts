@@ -1,6 +1,4 @@
 
-import { extractTelegramImage } from '../src/modules/imageExtractor';
-
 async function debug() {
   const url = 'https://t.me/RememberTheirNames/1690';
   // I need to copy the logic from extractTelegramImage to debug it, 

@@ -1,6 +1,5 @@
 const OPENROUTER_API_KEY = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env.VITE_OPENROUTER_API_KEY : process.env.VITE_OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = (typeof import.meta !== 'undefined' && import.meta.env) ? (import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free') : (process.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free');
-const TELEGRAM_BOT_TOKEN = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env.VITE_TELEGRAM_BOT_TOKEN : process.env.Telegram_Bot_Token;
 
 import { uploadImageToSupabase } from './supabase';
 
