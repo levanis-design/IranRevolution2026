@@ -5,54 +5,154 @@ import type { MemorialEntry } from './types'
 import type { Database } from './database.types'
 
 type MemorialRow = Database['public']['Tables']['memorials']['Row']
+type MemorialInsert = Database['public']['Tables']['memorials']['Insert']
+type MemorialUpdate = Database['public']['Tables']['memorials']['Update']
+type ReportRow = Database['public']['Tables']['reports']['Row']
+type ReportInsert = Database['public']['Tables']['reports']['Insert']
+type ReferenceLink = { label: string; url: string }
 
-export async function mergeMemorials(sourceId: string, targetId: string): Promise<{ success: boolean; error?: string }> {
+// ============================================================================
+// Type-Safe Query Helpers
+// ============================================================================
+
+interface QueryResult<T> {
+  data: T | null;
+  error: { message: string; code?: string } | null;
+}
+
+/**
+ * Helper to execute Supabase queries with proper typing
+ */
+async function fetchMemorialById(id: string): Promise<QueryResult<MemorialRow>> {
+  const { data, error } = await supabase!
+    .from('memorials')
+    .select('*')
+    .eq('id', id)
+    .single()
+  return { data, error }
+}
+
+async function findDuplicateMemorial(
+  name: string,
+  nameFa: string | undefined
+): Promise<QueryResult<MemorialRow>> {
+  let query = supabase!.from('memorials').select('id, name, name_fa, source_links, verified, media')
+
+  if (name && nameFa) {
+    query = query.or(`name.eq."${name}",name_fa.eq."${nameFa}"`)
+  } else if (name) {
+    query = query.eq('name', name)
+  } else if (nameFa) {
+    query = query.eq('name_fa', nameFa)
+  }
+
+  const { data, error } = await query.maybeSingle()
+  return { data, error }
+}
+
+async function findVerifiedDuplicate(
+  name: string,
+  city: string,
+  excludeId: string
+): Promise<QueryResult<MemorialRow>> {
+  const { data, error } = await supabase!
+    .from('memorials')
+    .select('*')
+    .eq('name', name)
+    .eq('city', city)
+    .eq('verified', true)
+    .neq('id', excludeId)
+    .maybeSingle()
+  return { data, error }
+}
+
+async function updateMemorial(
+  id: string,
+  updates: MemorialUpdate
+): Promise<{ error: { message: string } | null }> {
+  const { error } = await (supabase as unknown as typeof supabase)!
+    .from('memorials')
+    .update(updates as never)
+    .eq('id', id)
+  return { error }
+}
+
+async function deleteMemRecord(id: string): Promise<{ error: { message: string } | null }> {
+  const { error } = await (supabase as unknown as typeof supabase)!
+    .from('memorials')
+    .delete()
+    .eq('id', id)
+  return { error }
+}
+
+// ============================================================================
+// Reference Merging Helpers
+// ============================================================================
+
+function getSourceLinks(memorial: MemorialRow): ReferenceLink[] {
+  return (memorial.source_links as ReferenceLink[]) || []
+}
+
+function mergeReferences(
+  existingLinks: ReferenceLink[],
+  newLinks: ReferenceLink[]
+): ReferenceLink[] {
+  const urlsToAdd = newLinks.filter(
+    newR => !existingLinks.some(currR => currR.url === newR.url)
+  )
+  return [...existingLinks, ...urlsToAdd]
+}
+
+async function mergeMemorialReferences(
+  targetId: string,
+  sourceLinks: ReferenceLink[]
+): Promise<{ success: boolean; error?: string }> {
+  const { data: target } = await fetchMemorialById(targetId)
+  if (!target) {
+    return { success: false, error: 'Target entry not found' }
+  }
+
+  const currentRefs = getSourceLinks(target)
+  const mergedRefs = mergeReferences(currentRefs, sourceLinks)
+
+  if (mergedRefs.length > currentRefs.length) {
+    const { error } = await updateMemorial(targetId, { source_links: mergedRefs })
+    if (error) return { success: false, error: error.message }
+  }
+
+  return { success: true }
+}
+
+// ============================================================================
+// Main API Functions
+// ============================================================================
+
+export async function mergeMemorials(
+  sourceId: string,
+  targetId: string
+): Promise<{ success: boolean; error?: string }> {
   if (!supabase) return { success: false, error: 'Supabase not configured' }
+
   try {
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    // 1. Get both entries
-    const { data: source, error: sourceError } = await (supabase as any)
-      .from('memorials')
-      .select('*')
-      .eq('id', sourceId)
-      .single()
-    
-    const { data: target, error: targetError } = await (supabase as any)
-      .from('memorials')
-      .select('*')
-      .eq('id', targetId)
-      .single()
+    // Get both entries
+    const { data: source, error: sourceError } = await fetchMemorialById(sourceId)
+    const { data: target, error: targetError } = await fetchMemorialById(targetId)
 
     if (sourceError || targetError || !source || !target) {
       return { success: false, error: 'Could not find source or target entry.' }
     }
 
-    // 2. Combine references
-    const sourceRefs = (source.source_links as any[]) || []
-    const targetRefs = (target.source_links as any[]) || []
-    
-    const refsToAdd = sourceRefs.filter(newR => !targetRefs.some(currR => currR.url === newR.url))
-    
-    if (refsToAdd.length > 0) {
-      const updatedRefs = [...targetRefs, ...refsToAdd]
-      const { error: updateError } = await (supabase as any)
-        .from('memorials')
-        .update({ source_links: updatedRefs })
-        .eq('id', targetId)
-      
-      if (updateError) return { success: false, error: updateError.message }
-    }
+    // Merge references
+    const sourceRefs = getSourceLinks(source)
+    const result = await mergeMemorialReferences(targetId, sourceRefs)
 
-    // 3. Delete the source entry
-    const { error: deleteError } = await (supabase as any)
-      .from('memorials')
-      .delete()
-      .eq('id', sourceId)
+    if (!result.success) return result
 
+    // Delete the source entry
+    const { error: deleteError } = await deleteMemRecord(sourceId)
     if (deleteError) return { success: false, error: deleteError.message }
-    
+
     return { success: true }
-    /* eslint-enable @typescript-eslint/no-explicit-any */
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
   }
@@ -60,6 +160,7 @@ export async function mergeMemorials(sourceId: string, targetId: string): Promis
 
 export async function fetchMemorials(includeUnverified = false): Promise<MemorialEntry[]> {
   if (!supabase) return fetchStaticMemorials()
+
   try {
     let allData: MemorialRow[] = []
     let page = 0
@@ -103,67 +204,48 @@ export async function fetchMemorials(includeUnverified = false): Promise<Memoria
   }
 }
 
-export async function verifyMemorial(id: string): Promise<{ success: boolean; merged?: boolean; error?: string }> {
+export async function verifyMemorial(
+  id: string
+): Promise<{ success: boolean; merged?: boolean; error?: string }> {
   if (!supabase) return { success: false, error: 'Supabase not configured' }
+
   try {
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    // 1. Get the current entry
-    const { data: current, error: fetchError } = await (supabase as any)
-      .from('memorials')
-      .select('*')
-      .eq('id', id)
-      .single()
+    // Get the current entry
+    const { data: current, error: fetchError } = await fetchMemorialById(id)
 
     if (fetchError || !current) {
       return { success: false, error: fetchError?.message || 'Entry not found' }
     }
 
-    // 2. Check if another entry with the same name and city is ALREADY VERIFIED
-    const { data: existing, error: checkError } = await (supabase as any)
-      .from('memorials')
-      .select('*')
-      .eq('name', current.name)
-      .eq('city', current.city)
-      .eq('verified', true)
-      .neq('id', id)
-      .maybeSingle()
+    // Check for verified duplicate
+    const { data: existing, error: checkError } = await findVerifiedDuplicate(
+      current.name,
+      current.city,
+      id
+    )
 
     if (checkError) {
       console.error('Duplicate check error during verification:', checkError)
     }
 
     if (existing) {
-      // 3. MERGE: Add references from current to existing
-      const currentRefs = (current.source_links as any[]) || []
-      const existingRefs = (existing.source_links as any[]) || []
-      
-      const refsToAdd = currentRefs.filter(newR => !existingRefs.some(currR => currR.url === newR.url))
-      
-      if (refsToAdd.length > 0) {
-        const updatedRefs = [...existingRefs, ...refsToAdd]
-        const { error: updateError } = await (supabase as any)
-          .from('memorials')
-          .update({ source_links: updatedRefs })
-          .eq('id', existing.id)
-        
-        if (updateError) return { success: false, error: updateError.message }
-      }
+      // Merge: Add references from current to existing
+      const currentRefs = getSourceLinks(current)
+      const result = await mergeMemorialReferences(existing.id, currentRefs)
 
-      // 4. Delete the duplicate pending entry
-      await (supabase as any).from('memorials').delete().eq('id', id)
-      
+      if (!result.success) return result
+
+      // Delete the duplicate pending entry
+      await deleteMemRecord(id)
+
       return { success: true, merged: true }
     }
 
-    // 5. Standard verification if no duplicate found
-    const { error } = await (supabase as any)
-      .from('memorials')
-      .update({ verified: true })
-      .eq('id', id)
-
+    // Standard verification
+    const { error } = await updateMemorial(id, { verified: true })
     if (error) return { success: false, error: error.message }
+
     return { success: true }
-    /* eslint-enable @typescript-eslint/no-explicit-any */
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
   }
@@ -171,6 +253,7 @@ export async function verifyMemorial(id: string): Promise<{ success: boolean; me
 
 export async function deleteMemorial(id: string): Promise<{ success: boolean; error?: string }> {
   if (!supabase) return { success: false, error: 'Supabase not configured' }
+
   try {
     const { error } = await supabase
       .schema('public')
@@ -185,20 +268,24 @@ export async function deleteMemorial(id: string): Promise<{ success: boolean; er
   }
 }
 
-export async function submitReport(report: { memorial_id: string; memorial_name: string; reason: string; details: string }): Promise<{ success: boolean; error?: string }> {
+export async function submitReport(
+  report: Omit<ReportInsert, 'id' | 'created_at'>
+): Promise<{ success: boolean; error?: string }> {
   if (!supabase) return { success: false, error: 'Supabase not configured' }
+
   try {
-    // If table doesn't exist or is not configured for public insert, this will fail
-    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-    const { error } = await (supabase as any)
+    const { error } = await (supabase as unknown as typeof supabase)
       .from('reports')
-      .insert([report])
-    
+      .insert([report] as never)
+
     if (error) {
       console.error('Report submission error:', error)
-      // Check for common error types
-      if (error.code === '42P01') return { success: false, error: 'Database error: reports table not found. Please contact admin.' }
-      if (error.code === '42501') return { success: false, error: 'Permission denied: Public submissions for reports are not allowed yet.' }
+      if (error.code === '42P01') {
+        return { success: false, error: 'Database error: reports table not found. Please contact admin.' }
+      }
+      if (error.code === '42501') {
+        return { success: false, error: 'Permission denied: Public submissions for reports are not allowed yet.' }
+      }
       return { success: false, error: error.message }
     }
     return { success: true }
@@ -208,12 +295,11 @@ export async function submitReport(report: { memorial_id: string; memorial_name:
   }
 }
 
-/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-export async function fetchReports(): Promise<{ data: any[]; error?: string }> {
+export async function fetchReports(): Promise<{ data: ReportRow[]; error?: string }> {
   if (!supabase) return { data: [], error: 'Supabase not configured' }
+
   try {
-    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-    const { data, error } = await (supabase as any)
+    const { data, error } = await supabase
       .from('reports')
       .select('*')
       .order('created_at', { ascending: false })
@@ -232,6 +318,7 @@ export async function fetchReports(): Promise<{ data: any[]; error?: string }> {
 
 export async function deleteReport(id: string): Promise<{ success: boolean; error?: string }> {
   if (!supabase) return { success: false, error: 'Supabase not configured' }
+
   try {
     const { error } = await supabase
       .from('reports')
@@ -245,13 +332,16 @@ export async function deleteReport(id: string): Promise<{ success: boolean; erro
   }
 }
 
-export async function updateReportStatus(id: string, status: 'pending' | 'resolved' | 'dismissed'): Promise<{ success: boolean; error?: string }> {
+export async function updateReportStatus(
+  id: string,
+  status: 'pending' | 'resolved' | 'dismissed'
+): Promise<{ success: boolean; error?: string }> {
   if (!supabase) return { success: false, error: 'Supabase not configured' }
+
   try {
-    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-    const { data, error } = await (supabase as any)
+    const { data, error } = await (supabase as unknown as typeof supabase)
       .from('reports')
-      .update({ status })
+      .update({ status } as never)
       .eq('id', id)
       .select()
 
@@ -259,11 +349,11 @@ export async function updateReportStatus(id: string, status: 'pending' | 'resolv
       console.error('Update error:', error)
       return { success: false, error: error.message }
     }
-    
+
     if (!data || data.length === 0) {
       return { success: false, error: 'No report found or permission denied.' }
     }
-    
+
     return { success: true }
   } catch (e) {
     console.error('Update exception:', e)
@@ -271,10 +361,13 @@ export async function updateReportStatus(id: string, status: 'pending' | 'resolv
   }
 }
 
-export async function submitMemorial(entry: Partial<MemorialEntry>): Promise<{ success: boolean; merged?: boolean; error?: string }> {
+export async function submitMemorial(
+  entry: Partial<MemorialEntry>
+): Promise<{ success: boolean; merged?: boolean; error?: string }> {
   if (!supabase) {
     return { success: false, error: 'Database connection not available.' }
   }
+
   try {
     if (!entry.name) {
       return { success: false, error: 'Name is required.' }
@@ -286,78 +379,86 @@ export async function submitMemorial(entry: Partial<MemorialEntry>): Promise<{ s
     }
 
     const isEditing = !!entry.id
-    
+
     // Check for duplicates if this is a new entry
     if (!isEditing) {
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      // Improved search: check by name OR name_fa
-      let query = (supabase as any).from('memorials').select('id, name, name_fa, source_links, verified, media');
-      
-      if (entry.name && entry.name_fa) {
-        query = query.or(`name.eq."${entry.name}",name_fa.eq."${entry.name_fa}"`);
-      } else if (entry.name) {
-        query = query.eq('name', entry.name);
-      } else if (entry.name_fa) {
-        query = query.eq('name_fa', entry.name_fa);
-      }
-
-      const { data: existing, error: checkError } = await query.maybeSingle();
+      const { data: existing, error: checkError } = await findDuplicateMemorial(
+        entry.name,
+        entry.name_fa
+      )
 
       if (checkError) {
-        console.error('Duplicate check error:', checkError);
+        console.error('Duplicate check error:', checkError)
       } else if (existing) {
-        // MERGE LOGIC: If person exists, add the new references to their record
+        // MERGE LOGIC: Add new references to existing record
         const newRefs = entry.references || []
         if (newRefs.length > 0) {
-          const currentRefs = ((existing as any).source_links as any[]) || []
-          
-          // Filter out references that already exist (by URL)
-          const refsToAdd = newRefs.filter(newR => !currentRefs.some(currR => currR.url === newR.url))
-          
-          if (refsToAdd.length > 0 || (entry.media?.telegramPost && !(existing as any).media?.telegramPost)) {
-            const updatedRefs = [...currentRefs, ...refsToAdd]
-            const updates: any = { source_links: updatedRefs }
-            
-            // If new entry has a telegramPost and existing doesn't, add it
-            if (entry.media?.telegramPost && !(existing as any).media?.telegramPost) {
-              updates.media = { ...((existing as any).media || {}), telegramPost: entry.media.telegramPost }
+          const currentRefs = getSourceLinks(existing)
+
+          const refsToAdd = newRefs.filter(
+            newR => !currentRefs.some(currR => currR.url === newR.url)
+          )
+
+          const hasTelegramPost = entry.media?.telegramPost && !(existing.media as Record<string, string> | null)?.telegramPost
+
+          if (refsToAdd.length > 0 || hasTelegramPost) {
+            const updates: MemorialUpdate = { source_links: [...currentRefs, ...refsToAdd] }
+
+            if (hasTelegramPost && entry.media?.telegramPost) {
+              updates.media = { ...(existing.media as Record<string, string> || {}), telegramPost: entry.media.telegramPost }
             }
 
-            const { error: updateError } = await (supabase as any)
-              .from('memorials')
-              .update(updates)
-              .eq('id', (existing as any).id)
-            
+            // Auto-verify if source is RTN
+            const isRTN =
+              entry.media?.telegramPost?.includes('RememberTheirNames/') ||
+              (entry.references?.some(r => r.url.includes('RememberTheirNames/')))
+            if (isRTN) {
+              updates.verified = true
+            }
+
+            const { error: updateError } = await updateMemorial(existing.id, updates)
             if (updateError) return { success: false, error: updateError.message }
-            return { success: true, merged: true } // Successfully merged
+
+            return { success: true, merged: true }
           } else {
             return { success: false, error: 'These references already exist for this person.' }
           }
         }
       }
-      /* eslint-enable @typescript-eslint/no-explicit-any */
     }
 
-    const id = entry.id || entry.name?.toLowerCase().trim().replace(/\s+/g, '-') || `submission-${Date.now()}`
-    
-    // Auto-extract image from X, Telegram, or Instagram post if missing
-    if ((entry.media?.xPost || entry.media?.telegramPost || (entry.references && entry.references.some(r => r.url.includes('instagram.com')))) && !entry.media?.photo) {
+    // Auto-extract image if missing
+    const hasSocialLink =
+      entry.media?.xPost ||
+      entry.media?.telegramPost ||
+      (entry.references && entry.references.some(r => r.url.includes('instagram.com')))
+
+    if (hasSocialLink && !entry.media?.photo) {
       try {
-        const url = entry.media?.xPost || entry.media?.telegramPost || entry.references?.find(r => r.url.includes('instagram.com'))?.url;
+        const url =
+          entry.media?.xPost ||
+          entry.media?.telegramPost ||
+          entry.references?.find(r => r.url.includes('instagram.com'))?.url
         if (url) {
-          const photo = await extractSocialImage(url);
+          const photo = await extractSocialImage(url)
           if (photo) {
-            if (!entry.media) entry.media = {};
-            entry.media.photo = photo;
+            if (!entry.media) entry.media = {}
+            entry.media.photo = photo
           }
         }
-      } catch (e) {
+      } catch {
         // Silently fail auto-extraction
       }
     }
 
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    const dataToSave: any = {
+    // Prepare data for upsert
+    const id = entry.id || entry.name?.toLowerCase().trim().replace(/\s+/g, '-') || `submission-${Date.now()}`
+
+    const isRTN =
+      entry.media?.telegramPost?.includes('RememberTheirNames/') ||
+      (entry.references?.some(r => r.url.includes('RememberTheirNames/')))
+
+    const dataToSave: MemorialInsert = {
       id,
       name: entry.name || 'Unknown',
       name_fa: entry.name_fa || null,
@@ -368,20 +469,16 @@ export async function submitMemorial(entry: Partial<MemorialEntry>): Promise<{ s
       date: entry.date || new Date().toISOString().split('T')[0],
       bio: entry.bio || '',
       bio_fa: entry.bio_fa || null,
-      coords: (entry.coords || { lat: 35.6892, lon: 51.3890 }),
-      media: (entry.media || {}),
-      source_links: (entry.references || []),
-      testimonials: (entry.testimonials || []),
-      verified: entry.verified ?? false
+      coords: entry.coords || { lat: 35.6892, lon: 51.3890 },
+      media: entry.media || {},
+      source_links: entry.references || [],
+      testimonials: entry.testimonials || [],
+      verified: entry.verified || isRTN || false
     }
 
-    // If editing, we might want to be careful about what we overwrite if fields are missing.
-    // But for now, the admin panel sends the full state.
-
-    const { error } = await (supabase as any)
+    const { error } = await (supabase as unknown as typeof supabase)
       .from('memorials')
-      .upsert(dataToSave)
-    /* eslint-enable @typescript-eslint/no-explicit-any */
+      .upsert(dataToSave as never)
 
     if (error) {
       return { success: false, error: error.message }
@@ -393,78 +490,77 @@ export async function submitMemorial(entry: Partial<MemorialEntry>): Promise<{ s
   }
 }
 
-export async function batchUpdateImages(): Promise<{ success: boolean; count: number; error?: string }> {
+// ============================================================================
+// Batch Operations
+// ============================================================================
+
+interface BatchResult {
+  success: boolean;
+  count: number;
+  error?: string;
+}
+
+export async function batchUpdateImages(): Promise<BatchResult> {
   if (!supabase) return { success: false, count: 0, error: 'Supabase not configured' }
-  
+
   try {
     const { data: memorials, error: fetchError } = await supabase
       .from('memorials')
       .select('*')
-    
+
     if (fetchError) throw fetchError
-    
+
     const rows = (memorials || []) as MemorialRow[]
     const targets = rows.filter(m => {
-      const media = m.media as Record<string, unknown>
-      const refs = m.source_links as MemorialEntry['references']
+      const media = m.media as Record<string, unknown> | null
+      const refs = m.source_links as ReferenceLink[] | null
       const hasInsta = refs && refs.some(r => r.url && r.url.includes('instagram.com'))
       return (media?.xPost || media?.telegramPost || hasInsta) && !media?.photo
     })
-    
+
     if (targets.length === 0) return { success: true, count: 0 }
-    
+
     let updatedCount = 0
     for (const m of targets) {
       const media = m.media as Record<string, string>
-      const refs = m.source_links as MemorialEntry['references']
-      const xPost = media?.xPost
-      const telegramPost = media?.telegramPost
+      const refs = m.source_links as ReferenceLink[]
       const instaUrl = refs?.find(r => r.url && r.url.includes('instagram.com'))?.url
-      
-      const url = instaUrl || telegramPost || xPost
+
+      const url = instaUrl || media?.telegramPost || media?.xPost
+      if (!url) continue
+
       const photo = await extractSocialImage(url)
-      
+
       if (photo) {
         const updatedMedia = { ...media, photo }
-        const client = supabase as unknown as { 
-          from: (t: string) => { 
-            update: (d: Record<string, unknown>) => { 
-              eq: (f: string, v: string) => Promise<{ error: unknown }> 
-            } 
-          } 
-        }
-        const { error: updateError } = await client
-          .from('memorials')
-          .update({ media: updatedMedia })
-          .eq('id', m.id)
-          
+        const { error: updateError } = await updateMemorial(m.id, { media: updatedMedia })
         if (!updateError) updatedCount++
       }
-      
+
       await new Promise(r => setTimeout(r, 500))
     }
-    
+
     return { success: true, count: updatedCount }
   } catch (e) {
     return { success: false, count: 0, error: e instanceof Error ? e.message : 'Unknown error' }
   }
 }
 
-export async function batchTranslateMemorials(): Promise<{ success: boolean; count: number; error?: string }> {
+export async function batchTranslateMemorials(): Promise<BatchResult> {
   if (!supabase) return { success: false, count: 0, error: 'Supabase not configured' }
-  
+
   try {
     const { data: memorials, error: fetchError } = await supabase
       .from('memorials')
       .select('*')
-    
+
     if (fetchError) throw fetchError
-    
+
     const rows = (memorials || []) as MemorialRow[]
     const targets = rows.filter(m => !m.name_fa || !m.city_fa || !m.bio_fa)
-    
+
     if (targets.length === 0) return { success: true, count: 0 }
-    
+
     let updatedCount = 0
     for (const m of targets) {
       const translation = await translateMemorialData({
@@ -477,62 +573,52 @@ export async function batchTranslateMemorials(): Promise<{ success: boolean; cou
         location_fa: m.location_fa || undefined,
         bio_fa: m.bio_fa || undefined
       })
-      
-      if (translation) {
-        const client = supabase as unknown as { 
-          from: (t: string) => { 
-            update: (d: Record<string, unknown>) => { 
-              eq: (f: string, v: string) => Promise<{ error: unknown }> 
-            } 
-          } 
-        }
 
-        const updateData: Record<string, string> = {}
-        // Only fill if target is empty AND translation exists
+      if (translation) {
+        const updateData: MemorialUpdate = {}
+
         if (!m.name && translation.name && m.name_fa) updateData.name = translation.name
         if (!m.name_fa && translation.name_fa && m.name) updateData.name_fa = translation.name_fa
-        
+
         if (!m.city && translation.city && m.city_fa) updateData.city = translation.city
         if (!m.city_fa && translation.city_fa && m.city) updateData.city_fa = translation.city_fa
-        
+
         if (!m.location && translation.location && m.location_fa) updateData.location = translation.location
         if (!m.location_fa && translation.location_fa && m.location) updateData.location_fa = translation.location_fa
-        
+
         if (!m.bio && translation.bio && m.bio_fa) updateData.bio = translation.bio
         if (!m.bio_fa && translation.bio_fa && m.bio) updateData.bio_fa = translation.bio_fa
 
         if (Object.keys(updateData).length > 0) {
-          const { error: updateError } = await client
-            .from('memorials')
-            .update(updateData)
-            .eq('id', m.id)
-            
+          const { error: updateError } = await updateMemorial(m.id, updateData)
           if (!updateError) updatedCount++
         }
       }
-      
-      // Delay to avoid rate limits
+
       await new Promise(r => setTimeout(r, 500))
     }
-    
+
     return { success: true, count: updatedCount }
-   } catch (e) {
-     return { success: false, count: 0, error: e instanceof Error ? e.message : 'Unknown error' }
-   }
- }
- 
- export async function batchSyncLocationCoords(): Promise<{ success: boolean; count: number; error?: string }> {
+  } catch (e) {
+    return { success: false, count: 0, error: e instanceof Error ? e.message : 'Unknown error' }
+  }
+}
+
+export async function batchSyncLocationCoords(): Promise<BatchResult> {
   if (!supabase) return { success: false, count: 0, error: 'Supabase not configured' }
-  
+
   try {
-    const { data: memorials, error: fetchError } = await supabase.from('memorials').select('*')
+    const { data: memorials, error: fetchError } = await supabase
+      .from('memorials')
+      .select('*')
+
     if (fetchError) throw fetchError
-    
+
     const rows = (memorials || []) as MemorialRow[]
     let updatedCount = 0
 
     for (const m of rows) {
-      const update: Record<string, unknown> = {}
+      const update: MemorialUpdate = {}
       const coords = m.coords as { lat: number; lon: number } | null
 
       // Case 1: Has Location but missing/default Coordinates
@@ -550,48 +636,41 @@ export async function batchTranslateMemorials(): Promise<{ success: boolean; cou
       }
 
       if (Object.keys(update).length > 0) {
-        const client = supabase as unknown as { 
-          from: (t: string) => { 
-            update: (d: Record<string, unknown>) => { 
-              eq: (f: string, v: string) => Promise<{ error: unknown }> 
-            } 
-          } 
-        }
-        const { error: updateError } = await client
-          .from('memorials')
-          .update(update)
-          .eq('id', m.id)
-          
+        const { error: updateError } = await updateMemorial(m.id, update)
         if (!updateError) updatedCount++
         await new Promise(r => setTimeout(r, 500))
       }
     }
-    
+
     return { success: true, count: updatedCount }
   } catch (e) {
     return { success: false, count: 0, error: e instanceof Error ? e.message : 'Unknown error' }
   }
 }
 
- async function fetchStaticMemorials(): Promise<MemorialEntry[]> {
+// ============================================================================
+// Fallback Static Data
+// ============================================================================
+
+async function fetchStaticMemorials(): Promise<MemorialEntry[]> {
   try {
-    const baseUrl = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env.BASE_URL : '/';
-    const url = `${baseUrl}data/memorials.json`;
-    
-    // If we're in Node and it's a relative/absolute path-like URL, try reading from disk
+    const baseUrl = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env.BASE_URL : '/'
+    const url = `${baseUrl}data/memorials.json`
+
+    // Try reading from disk in Node environment
     if (typeof process !== 'undefined' && process.versions && process.versions.node && (url.startsWith('/') || !url.startsWith('http'))) {
-      const fs = await import('fs/promises');
-      const path = await import('path');
-      const fullPath = url.startsWith('/') 
+      const fs = await import('fs/promises')
+      const path = await import('path')
+      const fullPath = url.startsWith('/')
         ? path.join(process.cwd(), 'public', url)
-        : path.join(process.cwd(), 'public', 'data', 'memorials.json');
-      
+        : path.join(process.cwd(), 'public', 'data', 'memorials.json')
+
       try {
-        const content = await fs.readFile(fullPath, 'utf-8');
-        return JSON.parse(content);
+        const content = await fs.readFile(fullPath, 'utf-8')
+        return JSON.parse(content)
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.warn('Failed to read static memorials from disk, falling back to fetch', err);
+        console.warn('Failed to read static memorials from disk, falling back to fetch', err)
       }
     }
 
@@ -599,8 +678,8 @@ export async function batchTranslateMemorials(): Promise<{ success: boolean; cou
     return response.json()
   } catch (e) {
     // eslint-disable-next-line no-console
-    console.error('Error fetching static memorials:', e);
-    return [];
+    console.error('Error fetching static memorials:', e)
+    return []
   }
 }
 
@@ -619,7 +698,7 @@ export function mapRowToEntry(row: MemorialRow): MemorialEntry {
     bio_fa: row.bio_fa || undefined,
     testimonials: Array.isArray(row.testimonials) ? (row.testimonials as string[]) : undefined,
     media: row.media as MemorialEntry['media'],
-    references: (row.source_links as MemorialEntry['references']) || [],
+    references: (row.source_links as ReferenceLink[]) || [],
     verified: row.verified
   }
 }

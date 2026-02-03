@@ -1,156 +1,150 @@
-
 /* eslint-disable no-console */
 import { extractMemorialData } from '../src/modules/ai';
 import { submitMemorial, fetchMemorials } from '../src/modules/dataService';
-import { extractSocialImage } from '../src/modules/imageExtractor';
-import type { MemorialEntry } from '../src/modules/types';
-import * as fs from 'fs';
-import * as path from 'path';
+
+// Shared configuration and utilities
+import { TARGETS, RELEVANCE_KEYWORDS, REQUEST_DELAY_MS } from './config/discoveryConfig';
+import { loadHistory, saveHistory } from './config/historyManager';
+import { fetchUrlContent, extractSocialUrls, isDirectContentLink } from './utils/urlHelpers';
+import {
+  isValidVictim,
+  createMemorialEntry
+} from './utils/victimProcessor';
 
 /**
  * Script to automatically discover potential memorial posts on X (Twitter)
  * and add them to the Supabase database for review.
  */
 
-const HISTORY_FILE = path.join(process.cwd(), 'scripts', 'discovery_history.json');
-
-function loadHistory(): Set<string> {
-  try {
-    if (fs.existsSync(HISTORY_FILE)) {
-      const data = fs.readFileSync(HISTORY_FILE, 'utf8');
-      return new Set(JSON.parse(data));
-    }
-  } catch (error) {
-    console.error('Error loading history:', error);
-  }
-  return new Set();
+interface DiscoveryStats {
+  successCount: number;
+  skipCount: number;
 }
-
-function saveHistory(history: Set<string>) {
-  try {
-    fs.writeFileSync(HISTORY_FILE, JSON.stringify([...history], null, 2));
-  } catch (error) {
-    console.error('Error saving history:', error);
-  }
-}
-
-const TARGETS = [
-  'https://x.com/maroofian_n',
-  'https://hengaw.net/fa/news/2026/01/article-138-1',
-  'https://x.com/IranRights_org',
-  'https://x.com/indypersian',
-  'https://x.com/IranIntl_En',
-  'https://x.com/HyrcaniHRM',
-  'https://x.com/allahbakhshii',
-  'https://x.com/Tavaana',
-  'https://x.com/HoHossein',
-  'https://x.com/LoabatK',
-  'https://x.com/isamanyasin',
-  'https://x.com/longlosthills',
-  'https://x.com/iranwire',
-  'https://x.com/HengawO',
-  'https://x.com/1500tasvir',
-  'https://x.com/AmnestyIran',
-  'https://x.com/ICHRI',
-  'https://x.com/FSeifikaran',
-  'https://x.com/dadban4',
-  'https://x.com/Daikatuo',
-  'https://x.com/pouriazeraati',
-  'https://x.com/S_iran01',
-  'https://x.com/MonfaredAshkan',
-  'https://t.me/s/RememberTheirNames',
-  'https://x.com/search?q=%D8%AC%D8%A7%D9%86%D8%A8%D8%A7%D8%AE%D8%AA%D9%87%20%D8%A7%DB%8C%D8%B1%D8%A7%D9%86&f=live', // "جانباخته ایران" (Died Iran)
-  'https://x.com/search?q=%DA%A9%D8%B4%D8%AA%D9%87%20%D8%B4%D8%AF&f=live', // "کشته شد" (Was killed)
-];
 
 /**
- * Keywords that must be present in the content for it to be considered relevant.
- * This helps filter out sidebar content or unrelated news from search results.
+ * Searches a target URL for social media post URLs
  */
-const RELEVANCE_KEYWORDS = [
-  'کشته شد', 'جانباخته', 'اعدام', 'بازداشت', 'زندانی', 'اعتراضات', 
-  'شهید', 'مجروح', 'تیراندازی', 'شکنجه', 'حقوق بشر', 'ایران',
-  'killed', 'arrested', 'executed', 'prison', 'protest', 'torture', 'human rights', 'iran'
-];
-
-async function getUrlContent(url: string): Promise<string> {
-  try {
-    const readerUrl = `https://r.jina.ai/${url}`;
-    const response = await fetch(readerUrl, {
-      headers: { 'X-No-Cache': 'true' }
-    });
-
-    if (!response.ok) return '';
-    return await response.text();
-  } catch (error) {
-    return '';
-  }
-}
-
-async function getXStatusUrls(targetUrl: string): Promise<string[]> {
+async function searchTarget(targetUrl: string): Promise<Set<string>> {
   try {
     console.log(`Searching target: ${targetUrl}`);
-    const readerUrl = `https://r.jina.ai/${targetUrl}`;
-    const response = await fetch(readerUrl, {
-      headers: { 'X-No-Cache': 'true' }
-    });
 
-    if (!response.ok) {
-      console.error(`Failed to fetch ${targetUrl}: ${response.statusText}`);
-      return [];
+    const content = await fetchUrlContent(targetUrl);
+    if (!content) {
+      console.error(`Failed to fetch ${targetUrl}: No content returned`);
+      return new Set();
     }
 
-    const content = await response.text();
-    // Regex for X/Twitter status URLs
-    const xStatusRegex = /https:\/\/(x|twitter)\.com\/[a-zA-Z0-9_]+\/status\/[0-9]+/g;
-    const xMatches = content.match(xStatusRegex) || [];
-    
-    // Regex for Telegram post URLs
-    const telegramRegex = /https:\/\/t\.me\/[a-zA-Z0-9_]+\/[0-9]+/g;
-    const telegramMatches = content.match(telegramRegex) || [];
-
-    const allMatches = [
-      ...xMatches.map(url => url.replace('twitter.com', 'x.com')),
-      ...telegramMatches
-    ];
-    
-    return [...new Set(allMatches)];
+    const urls = extractSocialUrls(content);
+    return new Set(urls);
   } catch (error) {
     console.error(`Error searching ${targetUrl}:`, error);
-    return [];
+    return new Set();
   }
 }
 
-async function runDiscovery() {
-  console.log('--- Starting X Discovery Process ---');
-  
-  // 1. Load history of processed URLs
-  const history = loadHistory();
-  console.log(`Loaded ${history.size} previously processed URLs.`);
-
-  // 2. Get already existing memorials to avoid duplicates
-  const existingMemorials = await fetchMemorials(true);
-  const existingUrls = new Set(
-    existingMemorials.flatMap(m => [
-      m.media?.xPost,
-      ...(m.references?.map(r => r.url) || [])
-    ]).filter(Boolean) as string[]
+/**
+ * Checks if content contains relevant keywords
+ */
+function hasRelevantKeywords(content: string, url: string): boolean {
+  // For known relevant channels, be more lenient
+  if (isRememberThoseNames(url)) {
+    return true;
+  }
+  return RELEVANCE_KEYWORDS.some(keyword =>
+    content.toLowerCase().includes(keyword.toLowerCase())
   );
+}
 
-  console.log(`Found ${existingMemorials.length} existing entries in database.`);
+/**
+ * Checks if URL is from Remember Their Names
+ */
+function isRememberThoseNames(url: string): boolean {
+  return url.includes('RememberTheirNames/');
+}
 
-  // 3. Collect status URLs from all targets
+/**
+ * Processes a single URL for memorial data
+ */
+async function processUrl(
+  url: string,
+  stats: DiscoveryStats
+): Promise<void> {
+  try {
+    console.log(`Processing: ${url}`);
+
+    // Fetch content
+    const fetchUrl = url.includes('t.me/') ? `${url}?embed=1` : url;
+    const content = await fetchUrlContent(fetchUrl);
+
+    if (!content) {
+      console.log(`Skipping (could not fetch content): ${url}`);
+      stats.skipCount++;
+      return;
+    }
+
+    // Check for relevance keywords
+    if (!hasRelevantKeywords(content, url)) {
+      console.log(`Skipping (no relevant keywords found): ${url}`);
+      stats.skipCount++;
+      return;
+    }
+
+    // Extract data using AI
+    const victims = await extractMemorialData(url, content);
+
+    if (!victims || victims.length === 0) {
+      console.log(`Skipping (no victims found): ${url}`);
+      stats.skipCount++;
+      return;
+    }
+
+    // Process each victim
+    for (const data of victims) {
+      if (!isValidVictim(data)) {
+        console.log(`Skipping victim (invalid name) in: ${url}`);
+        stats.skipCount++;
+        continue;
+      }
+
+      // Create memorial entry (ensures photo internally)
+      const entry = await createMemorialEntry(data, url);
+
+      // Submit to database
+      const result = await submitMemorial(entry);
+
+      if (result.success) {
+        console.log(`Successfully added/merged: ${data.name}`);
+        stats.successCount++;
+      } else {
+        console.error(`Failed to submit ${data.name}: ${result.error}`);
+      }
+    }
+  } catch (error) {
+    console.error(`Error processing ${url}:`, error);
+  }
+}
+
+/**
+ * Collects all unique URLs from targets
+ */
+async function collectUrls(
+  targets: readonly string[],
+  existingUrls: Set<string>,
+  history: Set<string>
+): Promise<Set<string>> {
   const allUrls = new Set<string>();
-  for (const target of TARGETS) {
-    // Check if the target ITSELF is a direct article link (not a search/profile page)
-    if (target.includes('/status/') || target.includes('/news/') || target.includes('/article/')) {
+
+  for (const target of targets) {
+    // Check if the target itself is a direct article link
+    if (isDirectContentLink(target)) {
       if (!existingUrls.has(target) && !history.has(target)) {
         allUrls.add(target);
       }
       continue;
     }
 
-    const urls = await getXStatusUrls(target);
+    // Search target for URLs
+    const urls = await searchTarget(target);
     urls.forEach(url => {
       if (!existingUrls.has(url) && !history.has(url)) {
         allUrls.add(url);
@@ -158,106 +152,55 @@ async function runDiscovery() {
     });
   }
 
+  return allUrls;
+}
+
+/**
+ * Main discovery process
+ */
+async function runDiscovery(): Promise<void> {
+  console.log('--- Starting X Discovery Process ---');
+
+  // Load history of processed URLs
+  const history = loadHistory();
+  console.log(`Loaded ${history.size} previously processed URLs.`);
+
+  // Get already existing memorials to avoid duplicates
+  const existingMemorials = await fetchMemorials(true);
+  const existingUrls = new Set(
+    existingMemorials.flatMap(m => [
+      m.media?.xPost,
+      m.media?.telegramPost,
+      ...(m.references?.map(r => r.url) || [])
+    ]).filter(Boolean) as string[]
+  );
+
+  console.log(`Found ${existingMemorials.length} existing entries in database.`);
+
+  // Collect status URLs from all targets
+  const allUrls = await collectUrls(TARGETS, existingUrls, history);
   console.log(`Found ${allUrls.size} new potential status URLs.`);
 
-  // 4. Process each new URL
-  let successCount = 0;
-  let skipCount = 0;
+  // Process each URL
+  const stats: DiscoveryStats = { successCount: 0, skipCount: 0 };
 
   for (const url of allUrls) {
     // Mark as processed in history
     history.add(url);
 
-    try {
-      console.log(`Processing: ${url}`);
-      
-      // Fetch content first to check for relevance
-      // For Telegram, use embed mode to get better content
-      const fetchUrl = url.includes('t.me/') ? `${url}?embed=1` : url;
-      const content = await getUrlContent(fetchUrl);
-      
-      if (!content) {
-        console.log(`Skipping (could not fetch content): ${url}`);
-        skipCount++;
-        continue;
-      }
+    await processUrl(url, stats);
 
-      // Check for relevance keywords
-      // For known relevant channels like @RememberTheirNames, we can be more lenient
-      const isKnownRelevant = url.includes('RememberTheirNames');
-      const hasKeyword = isKnownRelevant || RELEVANCE_KEYWORDS.some(keyword => content.toLowerCase().includes(keyword.toLowerCase()));
-      
-      if (!hasKeyword) {
-        console.log(`Skipping (no relevant keywords found): ${url}`);
-        skipCount++;
-        continue;
-      }
-
-      // Extract data using AI (now returns an array of victims)
-      const victims = await extractMemorialData(url, content);
-      
-      if (!victims || victims.length === 0) {
-        console.log(`Skipping (no victims found): ${url}`);
-        skipCount++;
-        continue;
-      }
-
-      for (const data of victims) {
-        if (!data || !data.name || data.name === 'Full Name' || data.name === '') {
-          console.log(`Skipping victim (invalid name) in: ${url}`);
-          continue;
-        }
-
-        // Ensure we have an image
-        if (!data.photo) {
-          data.photo = await extractSocialImage(url) || '';
-        }
-
-        // Prepare memorial entry
-        const isXUrl = url.includes('x.com') || url.includes('twitter.com');
-        const isTelegramUrl = url.includes('t.me/');
-        
-        const entry: Partial<MemorialEntry> = {
-          ...data,
-          verified: false, // New entries from discovery are always unverified
-          media: {
-            xPost: isXUrl ? url : undefined,
-            photo: data.photo
-          },
-          references: [
-            { 
-              label: data.referenceLabel || (isXUrl ? 'X Post' : (isTelegramUrl ? 'Telegram' : 'Reference')), 
-              url: url 
-            }
-          ]
-        };
-
-        // Submit to database
-        const result = await submitMemorial(entry);
-        
-        if (result.success) {
-          console.log(`Successfully added/merged: ${data.name}`);
-          successCount++;
-        } else {
-          console.error(`Failed to submit ${data.name}: ${result.error}`);
-        }
-      }
-
-    } catch (error) {
-      console.error(`Error processing ${url}:`, error);
-    }
-    
-    // Add a small delay to avoid rate limits
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Add delay to avoid rate limits
+    await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY_MS));
   }
 
   // Save history for next run
   saveHistory(history);
 
   console.log('--- Discovery Finished ---');
-  console.log(`Added/Merged: ${successCount}`);
-  console.log(`Skipped: ${skipCount}`);
+  console.log(`Added/Merged: ${stats.successCount}`);
+  console.log(`Skipped: ${stats.skipCount}`);
 }
 
-// Check if run directly
+// Run if called directly
 runDiscovery().catch(console.error);

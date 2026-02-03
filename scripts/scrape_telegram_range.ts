@@ -1,31 +1,162 @@
 /* eslint-disable no-console */
 import { extractMemorialData } from '../src/modules/ai';
 import { submitMemorial, fetchMemorials } from '../src/modules/dataService';
-import { extractSocialImage } from '../src/modules/imageExtractor';
 import type { MemorialEntry } from '../src/modules/types';
+
+// Shared configuration and utilities
+import { MAX_CONSECUTIVE_EMPTY } from './config/discoveryConfig';
+import {
+  isValidVictim,
+  createTelegramMemorialEntry
+} from './utils/victimProcessor';
 
 /**
  * Script to scrape a range of Telegram messages from a specific channel.
  * Usage: npx tsx --env-file=.env scripts/scrape_telegram_range.ts <channel> <startId> <endId>
+ * Example: npx tsx --env-file=.env scripts/scrape_telegram_range.ts RememberTheirNames 1 1580
  */
 
-async function scrapeRange() {
+interface ProcessingStats {
+  successCount: number;
+  skipCount: number;
+  errorCount: number;
+}
+
+interface RangeConfig {
+  channel: string;
+  startId: number;
+  endId: number;
+  step: number;
+}
+
+/**
+ * Parses command line arguments for range configuration
+ */
+function parseRangeArgs(): RangeConfig | null {
   const args = process.argv.slice(2);
   if (args.length < 3) {
     console.log('Usage: npx tsx --env-file=.env scripts/scrape_telegram_range.ts <channel> <startId> <endId>');
     console.log('Example: npx tsx --env-file=.env scripts/scrape_telegram_range.ts RememberTheirNames 1 1580');
-    return;
+    return null;
   }
 
   const channel = args[0];
-  const startId = parseInt(args[1]);
-  const endId = parseInt(args[2]);
+  const startId = parseInt(args[1], 10);
+  const endId = parseInt(args[2], 10);
 
+  if (isNaN(startId) || isNaN(endId)) {
+    console.error('Error: startId and endId must be valid numbers');
+    return null;
+  }
+
+  const step = startId <= endId ? 1 : -1;
+  return { channel, startId, endId, step };
+}
+
+/**
+ * Checks if a memorial with the given URL already exists in the database
+ */
+function urlExistsInMemorials(url: string, memorialUrls: Set<string>): boolean {
+  return memorialUrls.has(url);
+}
+
+/**
+ * Processes a single victim entry
+ */
+async function processVictim(
+  data: Partial<MemorialEntry>,
+  url: string,
+  channel: string,
+  stats: ProcessingStats
+): Promise<void> {
+  if (!isValidVictim(data)) {
+    console.log(`Skipping victim (invalid name) in: ${url}`);
+    stats.skipCount++;
+    return;
+  }
+
+  // Prepare memorial entry (ensures photo internally)
+  const entry = await createTelegramMemorialEntry(data, url, channel);
+
+  // Submit to database
+  const result = await submitMemorial(entry);
+
+  if (result.success) {
+    if (result.merged) {
+      console.log(`Match found for "${data.name}". Added Telegram as reference.`);
+    } else {
+      console.log(`Successfully added new entry (unverified): ${data.name}`);
+    }
+    stats.successCount++;
+  } else {
+    if (result.error?.includes('already exist')) {
+      console.log(`Reference already exists for ${data.name}.`);
+      stats.skipCount++;
+    } else {
+      console.error(`Failed to submit ${data.name}: ${result.error}`);
+      stats.errorCount++;
+    }
+  }
+}
+
+/**
+ * Processes a single Telegram post URL
+ */
+async function processTelegramPost(
+  url: string,
+  memorialUrls: Set<string>,
+  channel: string,
+  stats: ProcessingStats
+): Promise<boolean> {
+  if (urlExistsInMemorials(url, memorialUrls)) {
+    console.log(`Skipping (already in database): ${url}`);
+    stats.skipCount++;
+    return false; // Reset counter on found/existing
+  }
+
+  try {
+    console.log(`Processing: ${url}`);
+
+    // Extract data using AI
+    const victims = await extractMemorialData(url);
+
+    if (!victims || victims.length === 0) {
+      console.log(`Skipping (no victims found or empty post): ${url}`);
+      return true; // Signal that we found no victims (potentially empty)
+    }
+
+    // Process each victim
+    for (const data of victims) {
+      await processVictim(data, url, channel, stats);
+    }
+
+    return false; // Found victims - reset counter
+  } catch (error) {
+    const err = error as { message?: string };
+    if (err.message === 'ai.error.blocked') {
+      console.log(`Skipping (content blocked or empty): ${url}`);
+      stats.skipCount++;
+    } else {
+      console.error(`Error processing ${url}:`, err.message || error);
+      stats.errorCount++;
+    }
+    return false; // Reset counter on errors
+  }
+}
+
+/**
+ * Scrapes a range of Telegram messages
+ */
+async function scrapeRange(): Promise<void> {
+  const config = parseRangeArgs();
+  if (!config) return;
+
+  const { channel, startId, endId, step } = config;
   console.log(`--- Starting Telegram Scrape: @${channel} from ${startId} to ${endId} ---`);
 
-  // Get already existing memorials to avoid duplicates if possible
+  // Get existing memorials to avoid duplicates
   const existingMemorials = await fetchMemorials(true);
-  const existingUrls = new Set(
+  const memorialUrls = new Set(
     existingMemorials.flatMap(m => {
       const refs = m.references?.map(r => r.url) || [];
       if (m.media?.telegramPost) {
@@ -35,110 +166,32 @@ async function scrapeRange() {
     }).filter(Boolean) as string[]
   );
 
-  let successCount = 0;
-  let skipCount = 0;
-  let errorCount = 0;
-
+  const stats: ProcessingStats = { successCount: 0, skipCount: 0, errorCount: 0 };
   let consecutiveEmpty = 0;
-  const MAX_CONSECUTIVE_EMPTY = 50;
-  const step = startId <= endId ? 1 : -1;
 
-  // Loop that handles both ascending and descending order
-  for (let id = startId; (step === 1 ? id <= endId : id >= endId); id += step) {
+  // Loop through range
+  for (let id = startId; step === 1 ? id <= endId : id >= endId; id += step) {
     const url = `https://t.me/${channel}/${id}`;
-    
-    if (existingUrls.has(url)) {
-      console.log(`Skipping (already in database): ${url}`);
-      skipCount++;
-      consecutiveEmpty = 0; // Reset counter on found/existing
-      continue;
+
+    const wasEmpty = await processTelegramPost(url, memorialUrls, channel, stats);
+
+    // Track consecutive empty posts
+    consecutiveEmpty = wasEmpty ? consecutiveEmpty + 1 : 0;
+
+    if (consecutiveEmpty >= MAX_CONSECUTIVE_EMPTY) {
+      console.log(`Reached limit of ${MAX_CONSECUTIVE_EMPTY} consecutive empty posts. Stopping early.`);
+      break;
     }
 
-    try {
-      console.log(`Processing: ${url}`);
-      
-      // Extract data using AI
-      const victims = await extractMemorialData(url);
-      
-      if (!victims || victims.length === 0) {
-        console.log(`Skipping (no victims found or empty post): ${url}`);
-        consecutiveEmpty++;
-        if (consecutiveEmpty >= MAX_CONSECUTIVE_EMPTY) {
-           console.log(`Reached limit of ${MAX_CONSECUTIVE_EMPTY} consecutive empty posts. Stopping early.`);
-           break;
-        }
-        continue;
-      }
-      
-      // Reset counter if we found victims
-      consecutiveEmpty = 0;
-
-      for (const data of victims) {
-        if (!data || !data.name || data.name === 'Full Name' || data.name === '') {
-          console.log(`Skipping victim (invalid name) in: ${url}`);
-          continue;
-        }
-
-        // Ensure we have an image
-        if (!data.photo) {
-          data.photo = await extractSocialImage(url) || '';
-        }
-
-        // Prepare memorial entry
-        const entry: Partial<MemorialEntry> = {
-          ...data,
-          verified: false, // Default for new entries; submitMemorial handles existing verification status
-          media: {
-            ...(data.media || {}),
-            photo: data.photo || data.media?.photo || '',
-            telegramPost: url // Add the Telegram URL as an embeddable post
-          },
-          references: [
-            ...(data.references || []),
-            { label: 'Telegram', url: url }
-          ]
-        };
-
-        // Submit to database (handles both new entry and merging as reference)
-        const result = await submitMemorial(entry);
-        
-        if (result.success) {
-          if (result.merged) {
-            console.log(`Match found for "${data.name}". Added Telegram as reference.`);
-          } else {
-            console.log(`Successfully added new entry (unverified): ${data.name}`);
-          }
-          successCount++;
-        } else {
-          if (result.error?.includes('already exist')) {
-            console.log(`Reference already exists for ${data.name}.`);
-            skipCount++;
-          } else {
-            console.error(`Failed to submit ${data.name}: ${result.error}`);
-            errorCount++;
-          }
-        }
-      }
-
-    } catch (error) {
-      const err = error as { message?: string };
-      if (err.message === 'ai.error.blocked') {
-        console.log(`Skipping (content blocked or empty): ${url}`);
-        skipCount++;
-      } else {
-        console.error(`Error processing ${url}:`, err.message || error);
-        errorCount++;
-      }
-    }
-    
-    // Small delay to be respectful and avoid rate limits
+    // Small delay to be respectful
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
 
   console.log('--- Scrape Finished ---');
-  console.log(`Added/Merged: ${successCount}`);
-  console.log(`Skipped: ${skipCount}`);
-  console.log(`Errors: ${errorCount}`);
+  console.log(`Added/Merged: ${stats.successCount}`);
+  console.log(`Skipped: ${stats.skipCount}`);
+  console.log(`Errors: ${stats.errorCount}`);
 }
 
+// Run if called directly
 scrapeRange().catch(console.error);
