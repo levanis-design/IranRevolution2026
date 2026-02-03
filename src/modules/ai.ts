@@ -318,7 +318,7 @@ export async function reverseGeocode(lat: number, lon: number): Promise<{ locati
             role: 'system',
             content: `You are an expert reverse geocoding assistant for Iran.
             Given Latitude and Longitude coordinates, identify the specific neighborhood/location and city in Iran.
-            
+
             Return ONLY a valid JSON object:
             {
               "location": "neighborhood or street name",
@@ -345,5 +345,47 @@ export async function reverseGeocode(lat: number, lon: number): Promise<{ locati
   } catch (error) {
     console.error('AI Reverse Geocoding Error:', error);
     return null;
+  }
+}
+
+/**
+ * Generic text generation using AI for admin review and other tasks.
+ * Returns the AI response text.
+ */
+export async function generateText(prompt: string): Promise<string> {
+  try {
+    if (!OPENROUTER_API_KEY || OPENROUTER_API_KEY === 'sk-or-v1-...') {
+      throw new Error('Invalid OpenRouter API Key.');
+    }
+
+    const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': (typeof window !== 'undefined') ? window.location.origin : 'https://iranrevolution2026.github.io',
+        'X-Title': 'Iran Revolution Memorial'
+      },
+      body: JSON.stringify({
+        model: OPENROUTER_MODEL,
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.3
+      })
+    });
+
+    if (!aiResponse.ok) {
+      throw new Error(`AI Service Error: ${aiResponse.statusText}`);
+    }
+
+    const result = await aiResponse.json();
+    return result.choices[0].message.content.trim();
+  } catch (error) {
+    console.error('AI Text Generation Error:', error);
+    throw error;
   }
 }

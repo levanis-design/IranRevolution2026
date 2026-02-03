@@ -26,3 +26,4 @@ dist-ssr
 .env
 migration.sql
 suggestion.md
+claude.md

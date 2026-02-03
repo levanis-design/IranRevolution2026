@@ -1013,13 +1013,15 @@ entryForm.addEventListener('submit', async (e) => {
   }
 
   const rawRefs = (document.getElementById('references') as HTMLTextAreaElement).value.trim()
-  
+
   const references = rawRefs.split('\n').map(line => {
-    const [label, url] = line.split('|').map(s => s.trim())
-    if (label && url) {
-      // If reference is Instagram, keep URL empty
-      const isInstagram = url.toLowerCase().includes('instagram.com')
-      return { label, url: isInstagram ? '' : url }
+    const parts = line.split('|')
+    if (parts.length >= 2) {
+      const label = parts[0].trim()
+      const url = parts.slice(1).join('|').trim() // Join rest in case URL contains |
+      if (label && url) {
+        return { label, url }
+      }
     }
     return null
   }).filter(Boolean) as { label: string, url: string }[]

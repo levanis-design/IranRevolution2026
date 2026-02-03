@@ -12,7 +12,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "backup": "npx tsx --env-file=.env backup_data.ts",
     "discover": "npx tsx --env-file=.env scripts/discover_x.ts",
-    "scrape-telegram": "npx tsx --env-file=.env scripts/scrape_telegram_range.ts"
+    "scrape-telegram": "npx tsx --env-file=.env scripts/scrape_telegram_range.ts",
+    "admin-review": "npx tsx --env-file=.env scripts/admin_review_agent.ts",
+    "verify-rtn": "npx tsx --env-file=.env scripts/batch_verify_rtn.ts"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.21",

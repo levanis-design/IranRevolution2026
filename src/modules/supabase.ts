@@ -4,8 +4,23 @@ import type { Database } from './database.types'
 const supabaseUrl = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env.VITE_SUPABASE_URL : process.env.VITE_SUPABASE_URL
 const supabaseAnonKey = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env.VITE_SUPABASE_ANON_KEY : process.env.VITE_SUPABASE_ANON_KEY
 
-export const supabase = (supabaseUrl && supabaseAnonKey) 
+// Service role key for admin operations (bypasses RLS)
+const supabaseServiceRoleKey = (typeof import.meta !== 'undefined' && import.meta.env)
+  ? import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || import.meta.env.SUPABASE_SERVICE_ROLE_KEY
+  : process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+
+export const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient<Database>(supabaseUrl, supabaseAnonKey)
+  : null
+
+// Admin client with service role key (bypasses RLS) - used for verification operations
+export const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey)
+  ? createClient<Database>(supabaseUrl, supabaseServiceRoleKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      }
+    })
   : null
 
 const BUCKET_NAME = 'memorial-images'

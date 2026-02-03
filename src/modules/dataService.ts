@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabase, supabaseAdmin } from './supabase'
 import { extractSocialImage } from './imageExtractor'
 import { translateMemorialData, geocodeLocation, reverseGeocode } from './ai'
 import type { MemorialEntry } from './types'
@@ -70,18 +70,30 @@ async function updateMemorial(
   id: string,
   updates: MemorialUpdate
 ): Promise<{ error: { message: string } | null }> {
-  const { error } = await (supabase as unknown as typeof supabase)!
+  // Use admin client if available (bypasses RLS)
+  const client = supabaseAdmin || supabase
+  if (!client) return { error: { message: 'No Supabase client available' } }
+
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const { error } = await (client as any)
     .from('memorials')
-    .update(updates as never)
+    .update(updates)
     .eq('id', id)
+  /* eslint-enable @typescript-eslint/no-explicit-any */
   return { error }
 }
 
 async function deleteMemRecord(id: string): Promise<{ error: { message: string } | null }> {
-  const { error } = await (supabase as unknown as typeof supabase)!
+  // Use admin client if available (bypasses RLS)
+  const client = supabaseAdmin || supabase
+  if (!client) return { error: { message: 'No Supabase client available' } }
+
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const { error } = await (client as any)
     .from('memorials')
     .delete()
     .eq('id', id)
+  /* eslint-enable @typescript-eslint/no-explicit-any */
   return { error }
 }
 
@@ -209,6 +221,14 @@ export async function verifyMemorial(
 ): Promise<{ success: boolean; merged?: boolean; error?: string }> {
   if (!supabase) return { success: false, error: 'Supabase not configured' }
 
+  // Check for admin access (service role key) for verification operations
+  if (!supabaseAdmin) {
+    // eslint-disable-next-line no-console
+    console.warn('⚠️  Warning: SUPABASE_SERVICE_ROLE_KEY not set. Verification may fail due to RLS policies.');
+    // eslint-disable-next-line no-console
+    console.warn('   Add VITE_SUPABASE_SERVICE_ROLE_KEY to your .env file to enable admin operations.');
+  }
+
   try {
     // Get the current entry
     const { data: current, error: fetchError } = await fetchMemorialById(id)
@@ -274,9 +294,11 @@ export async function submitReport(
   if (!supabase) return { success: false, error: 'Supabase not configured' }
 
   try {
-    const { error } = await (supabase as unknown as typeof supabase)
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const { error } = await (supabase as any)
       .from('reports')
-      .insert([report] as never)
+      .insert([report])
+    /* eslint-enable @typescript-eslint/no-explicit-any */
 
     if (error) {
       console.error('Report submission error:', error)
@@ -339,11 +361,13 @@ export async function updateReportStatus(
   if (!supabase) return { success: false, error: 'Supabase not configured' }
 
   try {
-    const { data, error } = await (supabase as unknown as typeof supabase)
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const { data, error } = await (supabase as any)
       .from('reports')
-      .update({ status } as never)
+      .update({ status })
       .eq('id', id)
       .select()
+    /* eslint-enable @typescript-eslint/no-explicit-any */
 
     if (error) {
       console.error('Update error:', error)
@@ -476,9 +500,11 @@ export async function submitMemorial(
       verified: entry.verified || isRTN || false
     }
 
-    const { error } = await (supabase as unknown as typeof supabase)
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const { error } = await (supabase as any)
       .from('memorials')
-      .upsert(dataToSave as never)
+      .upsert(dataToSave)
+    /* eslint-enable @typescript-eslint/no-explicit-any */
 
     if (error) {
       return { success: false, error: error.message }
