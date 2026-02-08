@@ -2,6 +2,8 @@
 import { extractMemorialData } from '../src/modules/ai';
 import { submitMemorial, fetchMemorials } from '../src/modules/dataService';
 import type { MemorialEntry } from '../src/modules/types';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { join } from 'path';
 
 // Shared configuration and utilities
 import { MAX_CONSECUTIVE_EMPTY } from './config/discoveryConfig';
@@ -10,10 +12,13 @@ import {
   createTelegramMemorialEntry
 } from './utils/victimProcessor';
 
+const POSITION_FILE = join(process.cwd(), '.scrape-position.json');
+
 /**
  * Script to scrape a range of Telegram messages from a specific channel.
- * Usage: npx tsx --env-file=.env scripts/scrape_telegram_range.ts <channel> <startId> <endId>
+ * Usage: npx tsx --env-file=.env scripts/scrape_telegram_range.ts <channel> <startId> <endId> [--resume]
  * Example: npx tsx --env-file=.env scripts/scrape_telegram_range.ts RememberTheirNames 1 1580
+ * Example (resume): npx tsx --env-file=.env scripts/scrape_telegram_range.ts RememberTheirNames 1 5000 --resume
  */
 
 interface ProcessingStats {
@@ -27,6 +32,38 @@ interface RangeConfig {
   startId: number;
   endId: number;
   step: number;
+  resume: boolean;
+}
+
+interface PositionData {
+  [channel: string]: number;
+}
+
+function loadPosition(): PositionData {
+  if (existsSync(POSITION_FILE)) {
+    try {
+      const data = readFileSync(POSITION_FILE, 'utf-8');
+      return JSON.parse(data);
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function savePosition(positionData: PositionData): void {
+  writeFileSync(POSITION_FILE, JSON.stringify(positionData, null, 2));
+}
+
+function getLastScrapedId(channel: string): number | null {
+  const positions = loadPosition();
+  return positions[channel] ?? null;
+}
+
+function updateLastScrapedId(channel: string, id: number): void {
+  const positions = loadPosition();
+  positions[channel] = id;
+  savePosition(positions);
 }
 
 /**
@@ -35,14 +72,16 @@ interface RangeConfig {
 function parseRangeArgs(): RangeConfig | null {
   const args = process.argv.slice(2);
   if (args.length < 3) {
-    console.log('Usage: npx tsx --env-file=.env scripts/scrape_telegram_range.ts <channel> <startId> <endId>');
+    console.log('Usage: npx tsx --env-file=.env scripts/scrape_telegram_range.ts <channel> <startId> <endId> [--resume]');
     console.log('Example: npx tsx --env-file=.env scripts/scrape_telegram_range.ts RememberTheirNames 1 1580');
+    console.log('Resume: npx tsx --env-file=.env scripts/scrape_telegram_range.ts RememberTheirNames 1 5000 --resume');
     return null;
   }
 
   const channel = args[0];
   const startId = parseInt(args[1], 10);
   const endId = parseInt(args[2], 10);
+  const resume = args.includes('--resume');
 
   if (isNaN(startId) || isNaN(endId)) {
     console.error('Error: startId and endId must be valid numbers');
@@ -50,7 +89,7 @@ function parseRangeArgs(): RangeConfig | null {
   }
 
   const step = startId <= endId ? 1 : -1;
-  return { channel, startId, endId, step };
+  return { channel, startId, endId, step, resume };
 }
 
 /**
@@ -151,8 +190,22 @@ async function scrapeRange(): Promise<void> {
   const config = parseRangeArgs();
   if (!config) return;
 
-  const { channel, startId, endId, step } = config;
-  console.log(`--- Starting Telegram Scrape: @${channel} from ${startId} to ${endId} ---`);
+  const { channel, startId, endId, step, resume } = config;
+  
+  let actualStartId = startId;
+  
+  if (resume) {
+    const lastScraped = getLastScrapedId(channel);
+    if (lastScraped !== null) {
+      actualStartId = step === 1 ? lastScraped + 1 : lastScraped - 1;
+      console.log(`Resuming from last scraped ID: ${lastScraped}`);
+      console.log(`Starting from: ${actualStartId}`);
+    } else {
+      console.log('No previous position found. Starting from beginning.');
+    }
+  }
+  
+  console.log(`--- Starting Telegram Scrape: @${channel} from ${actualStartId} to ${endId} ---`);
 
   // Get existing memorials to avoid duplicates
   const existingMemorials = await fetchMemorials(true);
@@ -170,10 +223,15 @@ async function scrapeRange(): Promise<void> {
   let consecutiveEmpty = 0;
 
   // Loop through range
-  for (let id = startId; step === 1 ? id <= endId : id >= endId; id += step) {
+  for (let id = actualStartId; step === 1 ? id <= endId : id >= endId; id += step) {
     const url = `https://t.me/${channel}/${id}`;
 
     const wasEmpty = await processTelegramPost(url, memorialUrls, channel, stats);
+
+    // Update position tracking
+    if (!wasEmpty && stats.successCount > 0 || stats.skipCount > 0) {
+      updateLastScrapedId(channel, id);
+    }
 
     // Track consecutive empty posts
     consecutiveEmpty = wasEmpty ? consecutiveEmpty + 1 : 0;

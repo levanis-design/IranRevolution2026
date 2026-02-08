@@ -388,7 +388,8 @@ export async function updateReportStatus(
 export async function submitMemorial(
   entry: Partial<MemorialEntry>
 ): Promise<{ success: boolean; merged?: boolean; error?: string }> {
-  if (!supabase) {
+  const client = supabaseAdmin || supabase
+  if (!client) {
     return { success: false, error: 'Database connection not available.' }
   }
 
@@ -501,7 +502,7 @@ export async function submitMemorial(
     }
 
     /* eslint-disable @typescript-eslint/no-explicit-any */
-    const { error } = await (supabase as any)
+    const { error } = await (client as any)
       .from('memorials')
       .upsert(dataToSave)
     /* eslint-enable @typescript-eslint/no-explicit-any */

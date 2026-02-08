@@ -28,6 +28,8 @@ jobs:
           VITE_OPENROUTER_MODEL: ${{ secrets.VITE_OPENROUTER_MODEL }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Service role key is required to bypass RLS policies for insert operations
+          VITE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_SERVICE_ROLE_KEY }}
 
       - name: Commit and push changes
         run: |

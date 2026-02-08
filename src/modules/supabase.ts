@@ -26,13 +26,14 @@ export const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey)
 const BUCKET_NAME = 'memorial-images'
 
 export async function uploadImageToSupabase(buffer: Buffer | ArrayBuffer, originalUrl: string): Promise<string | null> {
-  if (!supabase) return null
+  const client = supabaseAdmin || supabase
+  if (!client) return null
 
   try {
     const ext = originalUrl.split('.').pop()?.split('?')[0] || 'jpg'
     const filename = `${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2)}.${ext}`
     
-    const { error } = await supabase.storage
+    const { error } = await client.storage
       .from(BUCKET_NAME)
       .upload(filename, buffer, {
         contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
@@ -44,7 +45,7 @@ export async function uploadImageToSupabase(buffer: Buffer | ArrayBuffer, origin
       return null
     }
 
-    const { data: { publicUrl } } = supabase.storage
+    const { data: { publicUrl } } = client.storage
       .from(BUCKET_NAME)
       .getPublicUrl(filename)
 
