@@ -234,7 +234,16 @@ async function renderReports() {
     return
   }
 
-  reportsList.innerHTML = reports.map(r => `
+  const sortedReports = [...reports].sort((a, b) => {
+    const aResolved = a.status === 'resolved'
+    const bResolved = b.status === 'resolved'
+    if (aResolved !== bResolved) {
+      return aResolved ? 1 : -1
+    }
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  })
+
+  reportsList.innerHTML = sortedReports.map(r => `
     <tr class="data-row">
       <td data-label="Date" style="font-size: 0.85rem; color: var(--muted);">${new Date(r.created_at).toLocaleDateString()}</td>
       <td data-label="Memorial">
