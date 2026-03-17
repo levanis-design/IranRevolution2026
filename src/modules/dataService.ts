@@ -518,6 +518,47 @@ export async function submitMemorial(
 }
 
 // ============================================================================
+// Enrichment (fill missing fields without overwriting existing data)
+// ============================================================================
+
+export async function enrichMemorial(
+  name: string,
+  nameFa: string | undefined,
+  fields: Partial<MemorialEntry>
+): Promise<{ success: boolean; found: boolean; updated: boolean; error?: string }> {
+  if (!supabase) return { success: false, found: false, updated: false, error: 'Supabase not configured' }
+
+  const { data: existing, error: findError } = await findDuplicateMemorial(name, nameFa)
+  if (findError) return { success: false, found: false, updated: false, error: findError.message }
+  if (!existing) return { success: true, found: false, updated: false }
+
+  // Fetch full record to check all fields
+  const { data: full, error: fetchError } = await fetchMemorialById(existing.id)
+  if (fetchError || !full) return { success: false, found: true, updated: false, error: 'Could not fetch full record' }
+
+  const updates: MemorialUpdate = {}
+
+  if (fields.name_fa && (!full.name_fa || full.name_fa === 'Unknown')) updates.name_fa = fields.name_fa
+  if (fields.city && (!full.city || full.city === 'Unknown')) updates.city = fields.city
+  if (fields.date && (!full.date || full.date === '2026-01-09')) updates.date = fields.date
+  if (fields.bio && (!full.bio || full.bio === '')) updates.bio = fields.bio
+
+  // Always merge new references
+  if (fields.references && fields.references.length > 0) {
+    const currentRefs = getSourceLinks(full)
+    const merged = mergeReferences(currentRefs, fields.references as ReferenceLink[])
+    if (merged.length > currentRefs.length) updates.source_links = merged
+  }
+
+  if (Object.keys(updates).length === 0) return { success: true, found: true, updated: false }
+
+  const { error: updateError } = await updateMemorial(existing.id, updates)
+  if (updateError) return { success: false, found: true, updated: false, error: updateError.message }
+
+  return { success: true, found: true, updated: true }
+}
+
+// ============================================================================
 // Batch Operations
 // ============================================================================
 

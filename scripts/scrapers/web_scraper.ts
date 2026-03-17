@@ -57,7 +57,7 @@ const SOURCES: SourceConfig[] = [
     urls: [
       'https://iranvictims.com/'
     ],
-    enabled: true
+    enabled: false // replaced by scripts/scrapers/iranvictims_csv.ts (CSV import)
   },
   {
     name: 'iranmassacrewatch',
