@@ -26,6 +26,8 @@ export type MemorialEntry = {
   sensitive?: boolean
   sensitiveMedia?: boolean
   created_at?: string
+  _searchName?: string
+  _searchCity?: string
 }
 
 export interface TwitterWidgets {

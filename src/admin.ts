@@ -207,6 +207,10 @@ async function loadData() {
   recentList.innerHTML = loadingHtml
   
   allMemorials = await fetchMemorials(true)
+  allMemorials.forEach(m => {
+    m._searchName = m.name.toLowerCase()
+    m._searchCity = m.city.toLowerCase()
+  })
   const { error } = await refreshReportsData()
   await updateStats()
   renderSubmissions()
@@ -362,9 +366,9 @@ function renderSubmissions() {
   let filtered = allMemorials
     .filter(m => !m.verified)
     .filter(m => 
-      m.name.toLowerCase().includes(query) || 
+      (m._searchName || m.name.toLowerCase()).includes(query) ||
       (m.name_fa && m.name_fa.includes(query)) ||
-      m.city.toLowerCase().includes(query)
+      (m._searchCity || m.city.toLowerCase()).includes(query)
     )
   
   filtered = sortMemorialsList(filtered, sortBy)
@@ -378,9 +382,9 @@ function renderVerified() {
   let filtered = allMemorials
     .filter(m => m.verified)
     .filter(m => 
-      m.name.toLowerCase().includes(query) || 
+      (m._searchName || m.name.toLowerCase()).includes(query) ||
       (m.name_fa && m.name_fa.includes(query)) ||
-      m.city.toLowerCase().includes(query)
+      (m._searchCity || m.city.toLowerCase()).includes(query)
     )
   
   filtered = sortMemorialsList(filtered, sortBy)
@@ -479,9 +483,9 @@ function updateMergeResults() {
   const results = allMemorials
     .filter(m => m.id !== currentSourceId)
     .filter(m => 
-      m.name.toLowerCase().includes(query) || 
+      (m._searchName || m.name.toLowerCase()).includes(query) ||
       (m.name_fa && m.name_fa.includes(query)) ||
-      m.city.toLowerCase().includes(query)
+      (m._searchCity || m.city.toLowerCase()).includes(query)
     )
     .slice(0, 10)
 
