@@ -16,6 +16,7 @@ import type { ReportRow } from './modules/dataService'
 import { extractMemorialData, geocodeLocation } from './modules/ai'
 import { extractSocialImage } from './modules/imageExtractor'
 import type { MemorialEntry } from './modules/types'
+import { escapeHTML } from './modules/domUtils'
 
 // DOM Elements - Sections
 const loginSection = document.getElementById('login-section') as HTMLDivElement
@@ -243,7 +244,7 @@ async function renderReports(fetchError?: { message: string }) {
   const reports = allReports
 
   if (fetchError) {
-    reportsList.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger); padding: 2rem;">Error loading reports: ${fetchError.message}</td></tr>`
+    reportsList.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger); padding: 2rem;">Error loading reports: ${escapeHTML(fetchError.message)}</td></tr>`
     return
   }
 
@@ -265,21 +266,21 @@ async function renderReports(fetchError?: { message: string }) {
     <tr class="data-row">
       <td data-label="Date" style="font-size: 0.85rem; color: var(--muted);">${new Date(r.created_at).toLocaleDateString()}</td>
       <td data-label="Memorial">
-        <div style="font-weight: 600;">${r.memorial_name}</div>
-        <div style="font-size: 0.75rem; color: var(--muted);">ID: ${r.memorial_id}</div>
+        <div style="font-weight: 600;">${escapeHTML(r.memorial_name)}</div>
+        <div style="font-size: 0.75rem; color: var(--muted);">ID: ${escapeHTML(r.memorial_id)}</div>
       </td>
-      <td data-label="Reason"><span class="badge badge-pending">${r.reason}</span></td>
-      <td data-label="Details" style="max-width: 300px; font-size: 0.9rem;">${r.details || '<span style="color:var(--muted)">No details</span>'}</td>
+      <td data-label="Reason"><span class="badge badge-pending">${escapeHTML(r.reason)}</span></td>
+      <td data-label="Details" style="max-width: 300px; font-size: 0.9rem;">${r.details ? escapeHTML(r.details) : '<span style="color:var(--muted)">No details</span>'}</td>
       <td data-label="Status">
         <span class="badge ${r.status === 'resolved' ? 'badge-verified' : r.status === 'dismissed' ? 'badge-muted' : 'badge-pending'}">
-          ${r.status || 'pending'}
+          ${escapeHTML(r.status || 'pending')}
         </span>
       </td>
       <td data-label="Actions">
         <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-          <button class="btn btn-primary btn-sm view-memorial-btn" data-id="${r.memorial_id}">View</button>
-          ${r.status !== 'resolved' ? `<button class="btn btn-secondary btn-sm resolve-report-btn" data-id="${r.id}">Resolve</button>` : ''}
-          <button class="btn btn-danger btn-sm delete-report-btn" data-id="${r.id}">Dismiss</button>
+          <button class="btn btn-primary btn-sm view-memorial-btn" data-id="${escapeHTML(r.memorial_id)}">View</button>
+          ${r.status !== 'resolved' ? `<button class="btn btn-secondary btn-sm resolve-report-btn" data-id="${escapeHTML(r.id)}">Resolve</button>` : ''}
+          <button class="btn btn-danger btn-sm delete-report-btn" data-id="${escapeHTML(r.id)}">Dismiss</button>
         </div>
       </td>
     </tr>
@@ -408,8 +409,8 @@ function renderRecent() {
 
   recentList.innerHTML = recent.map(m => `
     <tr>
-      <td data-label="Name"><div style="font-weight: 600;">${m.name}</div></td>
-      <td data-label="City">${m.city}</td>
+      <td data-label="Name"><div style="font-weight: 600;">${escapeHTML(m.name)}</div></td>
+      <td data-label="City">${escapeHTML(m.city)}</td>
       <td data-label="Submitted At" style="font-size: 0.85rem; color: var(--muted);">${m.created_at ? new Date(m.created_at).toLocaleDateString() : 'Unknown'}</td>
       <td data-label="Status">
         <span class="badge ${m.verified ? 'badge-verified' : 'badge-pending'}">
@@ -429,11 +430,11 @@ function renderTable(memorials: MemorialEntry[], container: HTMLTableSectionElem
   container.innerHTML = memorials.map(m => `
     <tr class="data-row">
       <td data-label="Name">
-        <div style="font-weight: 600;">${m.name}</div>
-        <div style="font-size: 0.8rem; color: var(--muted);" dir="rtl">${m.name_fa || ''}</div>
+        <div style="font-weight: 600;">${escapeHTML(m.name)}</div>
+        <div style="font-size: 0.8rem; color: var(--muted);" dir="rtl">${escapeHTML(m.name_fa || '')}</div>
       </td>
-      <td data-label="City">${m.city}</td>
-      <td data-label="Date">${m.date}</td>
+      <td data-label="City">${escapeHTML(m.city)}</td>
+      <td data-label="Date">${escapeHTML(m.date)}</td>
       <td data-label="Status">
         <span class="badge ${m.verified ? 'badge-verified' : 'badge-pending'}">
           ${m.verified ? 'Verified' : 'Pending'}
@@ -441,10 +442,10 @@ function renderTable(memorials: MemorialEntry[], container: HTMLTableSectionElem
       </td>
       <td data-label="Actions">
         <div style="display: flex; gap: 0.4rem; justify-content: flex-end; flex-wrap: nowrap;">
-          <button class="btn btn-secondary btn-sm edit-btn" data-id="${m.id}">Edit</button>
-          ${!m.verified ? `<button class="btn btn-primary btn-sm verify-btn" data-id="${m.id}">Verify</button>` : ''}
-          <button class="btn btn-secondary btn-sm merge-btn" data-id="${m.id}" title="Merge references into another entry">Merge</button>
-          <button class="btn btn-danger btn-sm delete-btn" data-id="${m.id}">Delete</button>
+          <button class="btn btn-secondary btn-sm edit-btn" data-id="${escapeHTML(m.id)}">Edit</button>
+          ${!m.verified ? `<button class="btn btn-primary btn-sm verify-btn" data-id="${escapeHTML(m.id)}">Verify</button>` : ''}
+          <button class="btn btn-secondary btn-sm merge-btn" data-id="${escapeHTML(m.id)}" title="Merge references into another entry">Merge</button>
+          <button class="btn btn-danger btn-sm delete-btn" data-id="${escapeHTML(m.id)}">Delete</button>
         </div>
       </td>
     </tr>
@@ -496,10 +497,10 @@ function updateMergeResults() {
 
   mergeTargetResults.innerHTML = results.map(m => `
     <div class="merge-result-item ${m.id === currentTargetId ? 'selected' : ''}" 
-         data-id="${m.id}" 
+         data-id="${escapeHTML(m.id)}"
          style="padding: 0.75rem; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.2s;">
-      <div style="font-weight: 600;">${m.name} ${m.verified ? '✅' : '⏳'}</div>
-      <div style="font-size: 0.8rem; color: var(--muted);">${m.city} | ${m.date}</div>
+      <div style="font-weight: 600;">${escapeHTML(m.name)} ${m.verified ? '✅' : '⏳'}</div>
+      <div style="font-size: 0.8rem; color: var(--muted);">${escapeHTML(m.city)} | ${escapeHTML(m.date)}</div>
     </div>
   `).join('')
 
@@ -666,7 +667,7 @@ function checkDuplicate(name: string, city?: string, name_fa?: string) {
   if (match) {
     duplicateWarning.innerHTML = `
       <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-        <div>⚠️ <strong>Duplicate Found:</strong> ${match.name} (${match.city})</div>
+        <div>⚠️ <strong>Duplicate Found:</strong> ${escapeHTML(match.name)} (${escapeHTML(match.city)})</div>
         <div style="font-size: 0.8rem; opacity: 0.9;">
           If you save, this new entry will be <strong>merged</strong> into the existing one as a new reference.
         </div>
