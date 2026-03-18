@@ -4,7 +4,7 @@
  * @param str The string to escape.
  * @returns The escaped string.
  */
-export function escapeHTML(str: any): string {
+export function escapeHTML(str: string | null | undefined): string {
   if (str === null || str === undefined) return '';
   const s = String(str);
   return s

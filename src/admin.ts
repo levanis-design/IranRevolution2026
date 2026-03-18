@@ -10,9 +10,9 @@ import {
   batchSyncLocationCoords,
   fetchReports,
   updateReportStatus,
-  deleteReport,
-  ReportRow
+  deleteReport
 } from './modules/dataService'
+import type { ReportRow } from './modules/dataService'
 import { extractMemorialData, geocodeLocation } from './modules/ai'
 import { extractSocialImage } from './modules/imageExtractor'
 import type { MemorialEntry } from './modules/types'
@@ -229,7 +229,7 @@ async function refreshReportsData() {
   const { data, error } = await fetchReports()
   if (error) {
     console.error('Error fetching reports:', error)
-    return { error }
+    return { error: { message: error } }
   }
   allReports = data || []
   return { success: true }
@@ -237,7 +237,7 @@ async function refreshReportsData() {
 
 async function renderReports(fetchError?: { message: string }) {
   const reports = allReports
-  
+
   if (fetchError) {
     reportsList.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger); padding: 2rem;">Error loading reports: ${fetchError.message}</td></tr>`
     return

@@ -9,7 +9,7 @@ describe('escapeHTML', () => {
 
   it('handles empty strings and null/undefined', () => {
     expect(escapeHTML('')).toBe('')
-    expect(escapeHTML(null as any)).toBe('')
+    expect(escapeHTML(null)).toBe('')
     expect(escapeHTML(undefined)).toBe('')
   })
 
