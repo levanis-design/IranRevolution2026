@@ -201,7 +201,7 @@ async function triageReports(): Promise<void> {
       console.log(`  ${emoji}: ${result.aiReason}`);
 
       if (!DRY_RUN) {
-        const opResult: { success: boolean; error?: string };
+        let opResult: { success: boolean; error?: string };
         if (result.decision === 'resolve') {
           opResult = await resolveReport(report.id);
         } else {
