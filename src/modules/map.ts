@@ -72,9 +72,13 @@ export function initMap() {
     })
 
     // Fix for map not appearing correctly until resized
-    setTimeout(() => {
-      map.invalidateSize()
-    }, 100)
+    // Using ResizeObserver is more robust than a timeout
+    const resizeObserver = new ResizeObserver(() => {
+      if (map) {
+        map.invalidateSize()
+      }
+    })
+    resizeObserver.observe(container)
 
   } catch (err) {
     console.error('Error initializing Leaflet map:', err)
