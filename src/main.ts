@@ -9,6 +9,7 @@ import { initTwitter } from './modules/twitter'
 import { initInstagram } from './modules/instagram'
 import { supabase } from './modules/supabase'
 import { downloadMemorialPdf } from './modules/pdf'
+import { escapeHTML } from './modules/domUtils'
 
 let currentMemorials: MemorialEntry[] = []
 
@@ -159,19 +160,19 @@ function initListView() {
         const isSensitive = !!entry.sensitiveMedia;
         
         return `
-          <div class="list-item-card ${isSensitive ? 'list-item-sensitive' : ''}" data-id="${entry.id}">
+          <div class="list-item-card ${isSensitive ? 'list-item-sensitive' : ''}" data-id="${escapeHTML(entry.id)}">
             <div class="list-item-photo-wrapper">
-              <img src="${photo}" alt="${displayName}" class="list-item-photo ${isSensitive ? 'gated-media' : ''}" loading="lazy">
+              <img src="${escapeHTML(photo)}" alt="${escapeHTML(displayName)}" class="list-item-photo ${isSensitive ? 'gated-media' : ''}" loading="lazy">
               ${isSensitive ? `
                 <div class="sensitive-mini-overlay">
                   <span>⚠️</span>
-                  <button class="reveal-btn-mini" title="${t('sensitivity.show')}">${t('sensitivity.show')}</button>
+                  <button class="reveal-btn-mini" title="${escapeHTML(t('sensitivity.show'))}">${escapeHTML(t('sensitivity.show'))}</button>
                 </div>
               ` : ''}
             </div>
             <div class="list-item-info">
-              <div class="list-item-name">${displayName}</div>
-              <div class="list-item-meta">${displayCity}</div>
+              <div class="list-item-name">${escapeHTML(displayName)}</div>
+              <div class="list-item-meta">${escapeHTML(displayCity)}</div>
             </div>
           </div>
         `
@@ -332,23 +333,23 @@ function renderDetails(entry: MemorialEntry) {
   
   panel.innerHTML = `
     <div class="panel-header-actions">
-      <button id="back-to-map" class="back-button mobile-only" aria-label="${t('details.backToMap')}">← ${t('details.backToMap')}</button>
-      <button id="close-details" class="close-button" aria-label="${t('details.close')}">&times;</button>
+      <button id="back-to-map" class="back-button mobile-only" aria-label="${escapeHTML(t('details.backToMap'))}">← ${escapeHTML(t('details.backToMap'))}</button>
+      <button id="close-details" class="close-button" aria-label="${escapeHTML(t('details.close'))}">&times;</button>
     </div>
     <article class="memorial-profile">
       <header class="profile-header">
-        <h2>${displayName}</h2>
+        <h2>${escapeHTML(displayName)}</h2>
         <p class="profile-meta">
-          <strong>${t('details.city')}:</strong> ${displayCity}<br>
-          <strong>${t('details.date')}:</strong> ${date}<br>
-          <strong>${t('details.location')}:</strong> ${displayLocation}
+          <strong>${escapeHTML(t('details.city'))}:</strong> ${escapeHTML(displayCity)}<br>
+          <strong>${escapeHTML(t('details.date'))}:</strong> ${escapeHTML(date)}<br>
+          <strong>${escapeHTML(t('details.location'))}:</strong> ${escapeHTML(displayLocation)}
         </p>
       </header>
 
       ${entry.media?.photo ? wrapSensitive(`
         <figure class="profile-photo">
-          <img src="${entry.media.photo}" alt="${t('details.photoAlt', { name: displayName })}" loading="lazy" />
-          <figcaption class="photo-attribution">${t('details.photoAttribution')}</figcaption>
+          <img src="${escapeHTML(entry.media.photo)}" alt="${escapeHTML(t('details.photoAlt', { name: displayName }))}" loading="lazy" />
+          <figcaption class="photo-attribution">${escapeHTML(t('details.photoAttribution'))}</figcaption>
         </figure>
       `, !!entry.sensitiveMedia, 'sensitivity.mediaWarning') : ''}
 
@@ -356,40 +357,40 @@ function renderDetails(entry: MemorialEntry) {
         ${displayBio ? (entry.sensitive ? `
           <div class="sensitive-text-gated">
             <div class="sensitive-text-overlay">
-              <button class="reveal-btn">${t('sensitivity.show')}</button>
+              <button class="reveal-btn">${escapeHTML(t('sensitivity.show'))}</button>
             </div>
             <div class="sensitive-text-content">
-              <p>${displayBio}</p>
+              <p>${escapeHTML(displayBio)}</p>
             </div>
           </div>
-        ` : `<p>${displayBio}</p>`) : ''}
+        ` : `<p>${escapeHTML(displayBio)}</p>`) : ''}
       </div>
 
       <div class="action-section">
         <div class="candle-section">
-          <button id="light-candle" class="candle-button">🕯️ ${t('details.lightCandle')}</button>
-          <span id="candle-count" class="candle-count">0 ${t('details.candlesLit')}</span>
+          <button id="light-candle" class="candle-button">🕯️ ${escapeHTML(t('details.lightCandle'))}</button>
+          <span id="candle-count" class="candle-count">0 ${escapeHTML(t('details.candlesLit'))}</span>
         </div>
         <div class="share-section" style="gap: 8px;">
           <button id="share-btn" class="share-button">
-            📤 ${t('details.share')}
+            📤 ${escapeHTML(t('details.share'))}
           </button>
           <button id="download-pdf-btn" class="share-button">
-            📄 ${t('details.downloadPdf')}
+            📄 ${escapeHTML(t('details.downloadPdf'))}
           </button>
         </div>
       </div>
 
       <div class="report-section">
         <button id="open-report-btn" class="report-link-btn">
-           🚩 ${t('details.reportIssue')}
+           🚩 ${escapeHTML(t('details.reportIssue'))}
         </button>
       </div>
 
       ${entry.media?.video ? wrapSensitive(`
         <div class="profile-video">
-          <h3>${t('details.video')}</h3>
-          <video controls src="${entry.media.video}" aria-label="${t('details.videoAlt', { name: entry.name })}"></video>
+          <h3>${escapeHTML(t('details.video'))}</h3>
+          <video controls src="${escapeHTML(entry.media.video)}" aria-label="${escapeHTML(t('details.videoAlt', { name: entry.name }))}"></video>
         </div>
       `, !!entry.sensitiveMedia, 'sensitivity.mediaWarning') : ''}
 
@@ -400,17 +401,17 @@ function renderDetails(entry: MemorialEntry) {
         if (isInstagram) {
           return wrapSensitive(`
             <div class="profile-instagram-post">
-              <h3>${t('details.xPost')}</h3>
-              <blockquote class="instagram-media" data-instgrm-permalink="${url}" data-instgrm-version="14" style="background:#FFF; border:0; border-radius:3px; box-shadow:0 0 1px 0 rgba(0,0,0,0.5),0 1px 10px 0 rgba(0,0,0,0.15); margin: 1px; max-width:540px; min-width:326px; padding:0; width:99.375%; width:-webkit-calc(100% - 2px); width:calc(100% - 2px);">
+              <h3>${escapeHTML(t('details.xPost'))}</h3>
+              <blockquote class="instagram-media" data-instgrm-permalink="${escapeHTML(url)}" data-instgrm-version="14" style="background:#FFF; border:0; border-radius:3px; box-shadow:0 0 1px 0 rgba(0,0,0,0.5),0 1px 10px 0 rgba(0,0,0,0.15); margin: 1px; max-width:540px; min-width:326px; padding:0; width:99.375%; width:-webkit-calc(100% - 2px); width:calc(100% - 2px);">
               </blockquote>
             </div>
           `, !!entry.sensitiveMedia, 'sensitivity.mediaWarning');
         } else {
           return wrapSensitive(`
             <div class="profile-x-post">
-              <h3>${t('details.xPost')}</h3>
+              <h3>${escapeHTML(t('details.xPost'))}</h3>
               <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true">
-                <a href="${url}"></a>
+                <a href="${escapeHTML(url)}"></a>
               </blockquote>
             </div>
           `, !!entry.sensitiveMedia, 'sensitivity.mediaWarning');
@@ -419,9 +420,9 @@ function renderDetails(entry: MemorialEntry) {
 
       ${entry.media?.telegramPost ? wrapSensitive(`
         <div class="profile-telegram-post">
-          <h3>${t('details.telegramPost')}</h3>
+          <h3>${escapeHTML(t('details.telegramPost'))}</h3>
           <div class="telegram-embed-container">
-            <iframe src="${entry.media.telegramPost}${entry.media.telegramPost.includes('?') ? '&' : '?'}embed=1" 
+            <iframe src="${escapeHTML(entry.media.telegramPost)}${entry.media.telegramPost.includes('?') ? '&' : '?'}embed=1"
                     frameborder="0" 
                     scrolling="no" 
                     style="border:none; overflow:hidden; width:100%; height:450px;"></iframe>
@@ -431,10 +432,10 @@ function renderDetails(entry: MemorialEntry) {
 
       ${entry.references?.length ? `
         <section class="profile-references">
-          <h3>${t('details.references')}</h3>
+          <h3>${escapeHTML(t('details.references'))}</h3>
           <ul>
             ${entry.references.map(ref => `
-              <li><a href="${ref.url}" target="_blank" rel="noopener noreferrer">${ref.label}</a></li>
+              <li><a href="${escapeHTML(ref.url)}" target="_blank" rel="noopener noreferrer">${escapeHTML(ref.label)}</a></li>
             `).join('')}
           </ul>
         </section>
@@ -442,17 +443,17 @@ function renderDetails(entry: MemorialEntry) {
 
       ${displayTestimonials?.length ? `
         <section class="profile-testimonials">
-          <h3>${t('details.testimonials')}</h3>
+          <h3>${escapeHTML(t('details.testimonials'))}</h3>
           ${entry.sensitive ? `
             <div class="sensitive-text-gated">
               <div class="sensitive-text-overlay">
-                <button class="reveal-btn">${t('sensitivity.show')}</button>
+                <button class="reveal-btn">${escapeHTML(t('sensitivity.show'))}</button>
               </div>
               <div class="sensitive-text-content">
-                ${displayTestimonials.map((s) => `<blockquote>${s}</blockquote>`).join('')}
+                ${displayTestimonials.map((s) => `<blockquote>${escapeHTML(s)}</blockquote>`).join('')}
               </div>
             </div>
-          ` : displayTestimonials.map((s) => `<blockquote>${s}</blockquote>`).join('')}
+          ` : displayTestimonials.map((s) => `<blockquote>${escapeHTML(s)}</blockquote>`).join('')}
         </section>
       ` : ''}
     </article>
@@ -939,8 +940,8 @@ function initContributionForm() {
         duplicateWarning.innerHTML = `
           <p>⚠️ ${t('contribute.duplicateWarning')}</p>
           <div class="duplicate-actions">
-            <button type="button" class="view-duplicate-btn" data-id="${match.id}">
-              ${t('details.view')} <strong>${match.name}</strong>
+            <button type="button" class="view-duplicate-btn" data-id="${escapeHTML(match.id)}">
+              ${t('details.view')} <strong>${escapeHTML(match.name)}</strong>
             </button>
             <p style="font-size: 0.85rem; margin-top: 0.5rem; color: var(--muted);">
               ${t('contribute.mergeNote') || 'If you submit, your link will be added as a new reference to this person.'}
@@ -1101,13 +1102,13 @@ function initContributionForm() {
         body!.innerHTML = `
           <div class="submission-result error">
             <div class="error-icon" style="font-size: 3rem; margin: 1.5rem 0;">⚠️</div>
-            <h3>${t('contribute.errorTitle') || 'Submission Failed'}</h3>
-            <p>${result.error || 'An unexpected error occurred. Please try again or submit via GitHub.'}${errorHint}</p>
+            <h3>${escapeHTML(t('contribute.errorTitle') || 'Submission Failed')}</h3>
+            <p>${escapeHTML(result.error || 'An unexpected error occurred. Please try again or submit via GitHub.')}${errorHint}</p>
             
             <div class="offline-submission" style="margin-top: 1.5rem; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 1rem; background: rgba(0,0,0,0.2);">
               <p style="font-size: 0.85rem; margin-bottom: 1rem; color: var(--muted);">You can still submit by copying the data below and opening a GitHub issue:</p>
               <div class="json-preview-container" style="max-height: 200px; overflow-y: auto; text-align: left; background: #111; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
-                <code style="font-size: 0.8rem; white-space: pre-wrap;">${JSON.stringify(data, null, 2)}</code>
+                <code style="font-size: 0.8rem; white-space: pre-wrap;">${escapeHTML(JSON.stringify(data, null, 2))}</code>
               </div>
               <div class="actions" style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
                 <button id="copy-json-btn" class="nav-button btn-sm">${t('contribute.copy')}</button>
