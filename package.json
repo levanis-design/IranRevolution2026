@@ -16,7 +16,8 @@
     "admin-review": "npx tsx --env-file=.env scripts/admin_review_agent.ts",
     "verify-rtn": "npx tsx --env-file=.env scripts/batch_verify_rtn.ts",
     "scrape-iranvictims": "npx tsx --env-file=.env scripts/scrapers/iranvictims_csv.ts",
-    "verify-iranvictims": "npx tsx --env-file=.env scripts/batch_verify_iranvictims.ts"
+    "verify-iranvictims": "npx tsx --env-file=.env scripts/batch_verify_iranvictims.ts",
+    "triage-reports": "npx tsx --env-file=.env scripts/triage_reports.ts"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.21",

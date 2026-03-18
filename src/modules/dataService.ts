@@ -32,6 +32,16 @@ async function fetchMemorialById(id: string): Promise<QueryResult<MemorialRow>> 
   return { data, error }
 }
 
+/**
+ * Fetch a single memorial by ID (exported for scripts — uses admin client to bypass RLS)
+ */
+export async function getMemorialById(id: string): Promise<MemorialRow | null> {
+  const client = supabaseAdmin || supabase
+  if (!client) return null
+  const { data } = await client.from('memorials').select('*').eq('id', id).single()
+  return data ?? null
+}
+
 async function findDuplicateMemorial(
   name: string,
   nameFa: string | undefined
