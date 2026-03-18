@@ -1,5 +1,6 @@
 /* eslint-disable no-console */
 import { fetchMemorials, verifyMemorial } from '../src/modules/dataService';
+import type { MemorialEntry } from '../src/modules/types';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
@@ -143,7 +144,7 @@ interface AuditLogEntry {
 /**
  * Calculate credibility level from memorial sources
  */
-function calculateCredibility(memorial: any): {
+function calculateCredibility(memorial: MemorialEntry): {
   level: CredibilityLevel;
   source: string;
   description: string;
@@ -152,7 +153,7 @@ function calculateCredibility(memorial: any): {
   const allUrls = [
     memorial.media?.xPost,
     memorial.media?.telegramPost,
-    ...(memorial.references?.map((r: any) => r.url) || [])
+    ...(memorial.references?.map((r) => r.url) || [])
   ].filter(Boolean);
 
   for (const rule of CREDIBILITY_RULES) {
@@ -196,7 +197,7 @@ function getCredibilityEmoji(level: CredibilityLevel): string {
 /**
  * Build AI validation prompt based on credibility level
  */
-function buildValidationPrompt(memorial: any, credibility: CredibilityLevel): string {
+function buildValidationPrompt(memorial: MemorialEntry, credibility: CredibilityLevel): string {
   const strictness = credibility === 'low' ? 'strict' : credibility === 'high' ? 'lenient' : 'standard';
 
   return `You are reviewing a memorial submission for the Iran Revolution 2026 database.
@@ -214,7 +215,7 @@ ${memorial.location ? `LOCATION: ${memorial.location}` : ''}
 ${memorial.bio ? `BIO: ${memorial.bio}` : ''}
 
 REFERENCES:
-${memorial.references?.map((r: any) => `- ${r.label}: ${r.url}`).join('\n') || 'None'}
+${memorial.references?.map((r) => `- ${r.label}: ${r.url}`).join('\n') || 'None'}
 
 Evaluate the submission based on these criteria:
 
@@ -248,7 +249,7 @@ Be cautious but fair - approve if reasonably confident, flag for manual review i
  * Calls AI to validate a memorial submission
  */
 async function validateWithAI(
-  memorial: any,
+  memorial: MemorialEntry,
   credibility: CredibilityLevel
 ): Promise<{
   approved: boolean;
@@ -284,7 +285,7 @@ async function validateWithAI(
 /**
  * Fallback rule-based validation when AI is unavailable
  */
-function basicValidation(memorial: any, credibility: CredibilityLevel): {
+function basicValidation(memorial: MemorialEntry, credibility: CredibilityLevel): {
   approved: boolean;
   confidence: 'high' | 'medium' | 'low';
   reason: string;
@@ -355,9 +356,21 @@ function basicValidation(memorial: any, credibility: CredibilityLevel): {
  * Reviews a single memorial submission
  */
 async function reviewMemorial(
-  memorial: any,
+  memorial: MemorialEntry,
   auditLog: AuditLogEntry[]
 ): Promise<ReviewResult> {
+  if (!memorial.id) {
+    console.log(`  ❌ Error: Memorial missing ID: ${memorial.name}`);
+    return {
+      id: 'unknown',
+      name: memorial.name,
+      credibilityLevel: 'unknown',
+      approved: false,
+      reason: 'Error: Missing memorial ID',
+      confidence: 'low'
+    };
+  }
+
   console.log(`\n📋 Reviewing: ${memorial.name} (${memorial.id})`);
 
   // Step 1: Calculate source credibility
