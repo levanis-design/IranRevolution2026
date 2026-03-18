@@ -156,7 +156,7 @@ function initListView() {
       return items.map(entry => {
         const displayName = (isFa && entry.name_fa) ? entry.name_fa : entry.name
         const displayCity = (isFa && entry.city_fa) ? entry.city_fa : entry.city
-        const photo = entry.media?.photo || 'https://via.placeholder.com/300?text=No+Photo'
+        const photo = entry.media?.photo || 'https://placehold.co/300x300?text=No+Photo'
         const isSensitive = !!entry.sensitiveMedia;
         
         return `
