@@ -10,7 +10,8 @@ import {
   batchSyncLocationCoords,
   fetchReports,
   updateReportStatus,
-  deleteReport
+  deleteReport,
+  ReportRow
 } from './modules/dataService'
 import { extractMemorialData, geocodeLocation } from './modules/ai'
 import { extractSocialImage } from './modules/imageExtractor'
@@ -101,6 +102,7 @@ const jsonImportArea = document.getElementById('json-import') as HTMLTextAreaEle
 const jsonImportBtn = document.getElementById('json-import-btn') as HTMLButtonElement
 
 let allMemorials: MemorialEntry[] = []
+let allReports: ReportRow[] = []
 
 // --- Auth Logic ---
 
@@ -205,30 +207,42 @@ async function loadData() {
   recentList.innerHTML = loadingHtml
   
   allMemorials = await fetchMemorials(true)
+  const { error } = await refreshReportsData()
   await updateStats()
   renderSubmissions()
   renderVerified()
   renderRecent()
-  renderReports()
+  renderReports(error)
 }
 
 async function handleRefreshReports() {
   refreshReportsBtn.disabled = true
   refreshReportsBtn.textContent = 'Loading...'
-  await renderReports()
+  const { error } = await refreshReportsData()
+  await renderReports(error)
   await updateStats()
   refreshReportsBtn.disabled = false
   refreshReportsBtn.textContent = 'Refresh Reports'
 }
 
-async function renderReports() {
-  const { data: reports, error } = await fetchReports()
-  
+async function refreshReportsData() {
+  const { data, error } = await fetchReports()
   if (error) {
-    reportsList.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger); padding: 2rem;">Error loading reports: ${error}</td></tr>`
+    console.error('Error fetching reports:', error)
+    return { error }
+  }
+  allReports = data || []
+  return { success: true }
+}
+
+async function renderReports(fetchError?: { message: string }) {
+  const reports = allReports
+  
+  if (fetchError) {
+    reportsList.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger); padding: 2rem;">Error loading reports: ${fetchError.message}</td></tr>`
     return
   }
-  
+
   if (reports.length === 0) {
     reportsList.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 2rem;">No reports found.</td></tr>'
     return
@@ -282,7 +296,8 @@ async function renderReports() {
       btn.textContent = '...'
       const { success, error } = await updateReportStatus(id, 'resolved')
       if (success) {
-        await renderReports()
+        const { error: fetchError } = await refreshReportsData()
+        await renderReports(fetchError)
         await updateStats()
       } else {
         alert('Error updating report status: ' + error)
@@ -299,7 +314,8 @@ async function renderReports() {
         btn.textContent = '...'
         const { success, error } = await deleteReport(id)
         if (success) {
-          await renderReports()
+          const { error: fetchError } = await refreshReportsData()
+          await renderReports(fetchError)
           await updateStats()
         } else {
           alert('Error dismissing report: ' + error)
@@ -313,7 +329,6 @@ async function renderReports() {
 async function updateStats() {
   const verified = allMemorials.filter(m => m.verified)
   const pending = allMemorials.filter(m => !m.verified)
-  const { data: allReports } = await fetchReports()
   const activeReports = allReports.filter(r => r.status === 'pending' || !r.status)
   
   statTotal.textContent = allMemorials.length.toString()

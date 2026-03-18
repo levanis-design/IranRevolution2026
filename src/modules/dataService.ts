@@ -7,7 +7,7 @@ import type { Database } from './database.types'
 type MemorialRow = Database['public']['Tables']['memorials']['Row']
 type MemorialInsert = Database['public']['Tables']['memorials']['Insert']
 type MemorialUpdate = Database['public']['Tables']['memorials']['Update']
-type ReportRow = Database['public']['Tables']['reports']['Row']
+export type ReportRow = Database['public']['Tables']['reports']['Row']
 type ReportInsert = Database['public']['Tables']['reports']['Insert']
 type ReferenceLink = { label: string; url: string }
 
