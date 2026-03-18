@@ -823,8 +823,8 @@ extractImgBtn.addEventListener('click', async () => {
     } else {
       alert('Could not find an image in this post. The URL might be private or protected.')
     }
-  } catch (error) {
-    alert('Failed to extract image. The URL might be private or protected.')
+  } catch (e) {
+    alert('Failed to extract image: ' + (e instanceof Error ? e.message : String(e)))
   } finally {
     extractImgBtn.disabled = false
     extractImgBtn.textContent = originalText
@@ -853,7 +853,7 @@ syncCoordsBtn.addEventListener('click', async () => {
       alert('Could not find coordinates for this location.')
     }
   } catch (e) {
-    alert('Failed to sync coordinates.')
+    alert('Failed to sync coordinates: ' + (e instanceof Error ? e.message : String(e)))
   } finally {
     syncCoordsBtn.disabled = false
     syncCoordsBtn.textContent = originalText
@@ -871,7 +871,7 @@ batchImgBtn.addEventListener('click', async () => {
       alert(`Successfully updated ${count} memorials!`)
       loadData()
     } else alert(`Failed: ${error}`)
-  } catch (e) { alert('Failed.') } finally { 
+  } catch (e) { alert('Failed: ' + (e instanceof Error ? e.message : String(e))) } finally {
     batchImgBtn.disabled = false 
     batchImgBtn.textContent = originalText
   }
@@ -888,7 +888,7 @@ batchTranslateBtn.addEventListener('click', async () => {
       alert(`Successfully translated ${count} memorials!`)
       loadData()
     } else alert(`Failed: ${error}`)
-  } catch (e) { alert('Failed.') } finally { 
+  } catch (e) { alert('Failed: ' + (e instanceof Error ? e.message : String(e))) } finally {
     batchTranslateBtn.disabled = false 
     batchTranslateBtn.textContent = originalText
   }
@@ -905,7 +905,7 @@ batchCoordsBtn.addEventListener('click', async () => {
       alert(`Successfully synced ${count} memorials!`)
       loadData()
     } else alert(`Failed: ${error}`)
-  } catch (e) { alert('Failed.') } finally { 
+  } catch (e) { alert('Failed: ' + (e instanceof Error ? e.message : String(e))) } finally {
     batchCoordsBtn.disabled = false 
     batchCoordsBtn.textContent = originalText
   }
@@ -969,7 +969,7 @@ jsonImportBtn.addEventListener('click', async () => {
       alert(merged ? 'Merged into existing entry successfully!' : 'Memorial saved successfully!')
       loadData()
     } else alert(`Error: ${error}`)
-  } catch (e) { alert('Invalid JSON format.') } finally { jsonImportBtn.disabled = false }
+  } catch (e) { alert('Invalid JSON format: ' + (e instanceof Error ? e.message : String(e))) } finally { jsonImportBtn.disabled = false }
 })
 
 function populateForm(data: Partial<MemorialEntry> & { referenceLabel?: string; photo?: string }) {
