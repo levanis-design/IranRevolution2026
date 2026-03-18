@@ -476,29 +476,23 @@ function renderDetails(entry: MemorialEntry) {
 
   // Trigger Social Media widget rendering if present
   if (entry.media?.xPost) {
-    /* eslint-disable no-console */
-    console.log('Social post URL detected:', entry.media.xPost);
-    
     if (entry.media.xPost.includes('instagram.com')) {
        const instgrm = window.instgrm;
        if (instgrm && instgrm.Embeds) {
-          console.log('Instagram widgets library ready, processing...');
           instgrm.Embeds.process();
        } else {
-          console.warn('Instagram widgets library NOT ready or not found');
+          console.error('Instagram widgets library NOT ready or not found');
        }
     } else {
       const twttr = window.twttr
       if (twttr && twttr.ready) {
-        console.log('Twitter widgets library ready, loading widget...');
         twttr.ready((t) => {
           t.widgets.load(panel)
         })
       } else {
-        console.warn('Twitter widgets library NOT ready or not found');
+        console.error('Twitter widgets library NOT ready or not found');
       }
     }
-    /* eslint-enable no-console */
   }
 
   const openReportBtn = document.getElementById('open-report-btn')
