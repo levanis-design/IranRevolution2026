@@ -171,7 +171,7 @@ async function triageReports(): Promise<void> {
     console.log(`\n[${i + 1}/${reports.length}] Report: ${report.memorial_name} (${report.reason})`);
     if (report.details) console.log(`  Details: "${report.details.substring(0, 100)}"`);
 
-    let result: TriageResult = {
+    const result: TriageResult = {
       reportId: report.id,
       memorialId: report.memorial_id,
       memorialName: report.memorial_name,
@@ -201,7 +201,7 @@ async function triageReports(): Promise<void> {
       console.log(`  ${emoji}: ${result.aiReason}`);
 
       if (!DRY_RUN) {
-        let opResult: { success: boolean; error?: string };
+        const opResult: { success: boolean; error?: string };
         if (result.decision === 'resolve') {
           opResult = await resolveReport(report.id);
         } else {
