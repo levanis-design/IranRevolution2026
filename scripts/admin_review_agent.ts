@@ -154,7 +154,7 @@ function calculateCredibility(memorial: MemorialEntry): {
     memorial.media?.xPost,
     memorial.media?.telegramPost,
     ...(memorial.references?.map((r) => r.url) || [])
-  ].filter(Boolean);
+  ].filter((u): u is string => typeof u === 'string' && u.length > 0);
 
   for (const rule of CREDIBILITY_RULES) {
     for (const url of allUrls) {
