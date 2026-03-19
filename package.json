@@ -18,7 +18,8 @@
     "scrape-iranvictims": "npx tsx --env-file=.env scripts/scrapers/iranvictims_csv.ts",
     "verify-iranvictims": "npx tsx --env-file=.env scripts/batch_verify_iranvictims.ts",
     "triage-reports": "npx tsx --env-file=.env scripts/triage_reports.ts",
-    "sync-images": "npx tsx --env-file=.env scripts/sync_images.ts"
+    "sync-images": "npx tsx --env-file=.env scripts/sync_images.ts",
+    "fix-missing-photos": "npx tsx --env-file=.env scripts/fix_all_missing_photos.ts"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.21",
