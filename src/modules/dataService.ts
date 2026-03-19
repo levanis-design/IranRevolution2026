@@ -599,23 +599,34 @@ export async function batchUpdateImages(): Promise<BatchResult> {
     if (targets.length === 0) return { success: true, count: 0 }
 
     let updatedCount = 0
-    for (const m of targets) {
-      const media = m.media as Record<string, string>
-      const refs = m.source_links as ReferenceLink[]
-      const instaUrl = refs?.find(r => r.url && r.url.includes('instagram.com'))?.url
+    const CONCURRENCY_LIMIT = 5
 
-      const url = instaUrl || media?.telegramPost || media?.xPost
-      if (!url) continue
+    for (let i = 0; i < targets.length; i += CONCURRENCY_LIMIT) {
+      const batch = targets.slice(i, i + CONCURRENCY_LIMIT)
 
-      const photo = await extractSocialImage(url)
+      await Promise.all(batch.map(async (m) => {
+        const media = m.media as Record<string, string>
+        const refs = m.source_links as ReferenceLink[]
+        const instaUrl = refs?.find(r => r.url && r.url.includes('instagram.com'))?.url
 
-      if (photo) {
-        const updatedMedia = { ...media, photo }
-        const { error: updateError } = await updateMemorial(m.id, { media: updatedMedia })
-        if (!updateError) updatedCount++
+        const url = instaUrl || media?.telegramPost || media?.xPost
+        if (!url) return
+
+        const photo = await extractSocialImage(url)
+
+        if (photo) {
+          const updatedMedia = { ...media, photo }
+          const { error: updateError } = await updateMemorial(m.id, { media: updatedMedia })
+          if (!updateError) {
+            updatedCount++
+          }
+        }
+      }))
+
+      // Keep a small delay between batches to be respectful to rate limits, but significantly faster
+      if (i + CONCURRENCY_LIMIT < targets.length) {
+        await new Promise(r => setTimeout(r, 500))
       }
-
-      await new Promise(r => setTimeout(r, 500))
     }
 
     return { success: true, count: updatedCount }
