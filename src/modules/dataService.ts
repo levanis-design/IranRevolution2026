@@ -93,6 +93,20 @@ async function updateMemorial(
   return { error }
 }
 
+async function batchUpdateMemorials(
+  updates: MemorialUpdate[]
+): Promise<{ error: { message: string } | null }> {
+  const client = supabaseAdmin || supabase
+  if (!client) return { error: { message: 'No Supabase client available' } }
+
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const { error } = await (client as any)
+    .from('memorials')
+    .upsert(updates)
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+  return { error }
+}
+
 async function deleteMemRecord(id: string): Promise<{ error: { message: string } | null }> {
   // Use admin client if available (bypasses RLS)
   const client = supabaseAdmin || supabase
@@ -650,7 +664,9 @@ export async function batchTranslateMemorials(): Promise<BatchResult> {
 
     if (targets.length === 0) return { success: true, count: 0 }
 
-    let updatedCount = 0
+    const updatesToSave: MemorialUpdate[] = []
+    const allTranslationKeys = new Set<keyof MemorialUpdate>()
+
     for (const m of targets) {
       const translation = await translateMemorialData({
         name: m.name,
@@ -679,15 +695,35 @@ export async function batchTranslateMemorials(): Promise<BatchResult> {
         if (!m.bio_fa && translation.bio_fa && m.bio) updateData.bio_fa = translation.bio_fa
 
         if (Object.keys(updateData).length > 0) {
-          const { error: updateError } = await updateMemorial(m.id, updateData)
-          if (!updateError) updatedCount++
+          Object.keys(updateData).forEach(k => allTranslationKeys.add(k as keyof MemorialUpdate))
+          updatesToSave.push({ id: m.id, ...updateData } as MemorialUpdate)
         }
       }
 
       await new Promise(r => setTimeout(r, 500))
     }
 
-    return { success: true, count: updatedCount }
+    if (updatesToSave.length > 0) {
+      // Normalize objects so they have identical keys to satisfy PostgREST bulk upsert
+      const normalizedUpdates = updatesToSave.map(update => {
+        const normalized = { ...update }
+        allTranslationKeys.forEach(key => {
+          if (!(key in normalized)) {
+            // Find the original row to get the missing field's current value
+            const originalRow = targets.find(t => t.id === update.id)
+            if (originalRow) {
+              (normalized as any)[key] = originalRow[key as keyof MemorialRow]
+            }
+          }
+        })
+        return normalized
+      })
+
+      const { error: batchError } = await batchUpdateMemorials(normalizedUpdates)
+      if (batchError) throw new Error(batchError.message)
+    }
+
+    return { success: true, count: updatesToSave.length }
   } catch (e) {
     return { success: false, count: 0, error: e instanceof Error ? e.message : 'Unknown error' }
   }
