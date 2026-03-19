@@ -355,6 +355,8 @@ function sortMemorialsList(memorials: MemorialEntry[], sortBy: string) {
         return b.name.localeCompare(a.name)
       case 'city-asc':
         return a.city.localeCompare(b.city)
+      case 'sources-desc':
+        return (b.references?.length ?? 0) - (a.references?.length ?? 0)
       default:
         return 0
     }
@@ -427,7 +429,10 @@ function renderTable(memorials: MemorialEntry[], container: HTMLTableSectionElem
     return
   }
 
-  container.innerHTML = memorials.map(m => `
+  container.innerHTML = memorials.map(m => {
+    const srcCount = m.references?.length ?? 0
+    const credColor = srcCount >= 3 ? 'var(--verified)' : srcCount >= 2 ? '#f59e0b' : 'var(--muted)'
+    return `
     <tr class="data-row">
       <td data-label="Name">
         <div style="font-weight: 600;">${escapeHTML(m.name)}</div>
@@ -435,6 +440,10 @@ function renderTable(memorials: MemorialEntry[], container: HTMLTableSectionElem
       </td>
       <td data-label="City">${escapeHTML(m.city)}</td>
       <td data-label="Date">${escapeHTML(m.date)}</td>
+      <td data-label="Sources" title="${srcCount} source${srcCount !== 1 ? 's' : ''}">
+        <span style="font-weight:600;color:${credColor}">${srcCount}</span>
+        <span style="font-size:0.75rem;color:var(--muted)"> src</span>
+      </td>
       <td data-label="Status">
         <span class="badge ${m.verified ? 'badge-verified' : 'badge-pending'}">
           ${m.verified ? 'Verified' : 'Pending'}
@@ -448,8 +457,8 @@ function renderTable(memorials: MemorialEntry[], container: HTMLTableSectionElem
           <button class="btn btn-danger btn-sm delete-btn" data-id="${escapeHTML(m.id)}">Delete</button>
         </div>
       </td>
-    </tr>
-  `).join('')
+    </tr>`
+  }).join('')
 
   // Add event listeners
   container.querySelectorAll('.edit-btn').forEach(btn => {

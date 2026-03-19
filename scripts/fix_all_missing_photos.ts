@@ -53,14 +53,14 @@ async function downloadImage(url: string): Promise<Buffer | null> {
 async function run() {
   console.log(`🔍 Fetching all memorials${dryRun ? ' (DRY RUN)' : ''}...`)
 
-  let all: any[] = [], page = 0
-  while (true) {
+  let all: any[] = [], page = 0, hasMore = true
+  while (hasMore) {
     const { data, error } = await supabase
       .from('memorials')
       .select('id,name,media,source_links')
       .range(page * 1000, page * 1000 + 999)
-    if (error) { console.error('Fetch error:', error.message); break }
-    if (!data?.length) break
+    if (error) { console.error('Fetch error:', error.message); hasMore = false; break }
+    if (!data?.length) { hasMore = false; break }
     all = [...all, ...data]
     if (data.length < 1000) break
     page++
@@ -91,7 +91,7 @@ async function run() {
       if (!photoUrl) { console.log('❌ no image extracted'); failed++; continue }
 
       // If already a Supabase URL (Telegram cached), use directly
-      if (photoUrl.includes(supabaseUrl)) {
+      if (supabaseUrl && photoUrl.includes(supabaseUrl)) {
         const updatedMedia = { ...(m.media || {}), photo: photoUrl }
         const { error } = await supabase.from('memorials').update({ media: updatedMedia }).eq('id', m.id)
         if (error) { console.log(`❌ update failed: ${error.message}`); failed++ }

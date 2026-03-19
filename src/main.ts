@@ -149,6 +149,14 @@ function initListView() {
     modalContent.classList.add('large')
     modalOverlay.classList.remove('hidden')
     
+    const sourceCount = (entry: MemorialEntry) => entry.references?.length ?? 0
+
+    const sortItems = (items: MemorialEntry[], sortBy: string) => [...items].sort((a, b) => {
+      if (sortBy === 'sources-desc') return sourceCount(b) - sourceCount(a)
+      if (sortBy === 'name-asc') return a.name.localeCompare(b.name)
+      return 0
+    })
+
     const renderItems = (items: MemorialEntry[]) => {
       if (items.length === 0) {
         return `<div class="list-empty-state">${t('list.noResults')}</div>`
@@ -157,8 +165,9 @@ function initListView() {
         const displayName = (isFa && entry.name_fa) ? entry.name_fa : entry.name
         const displayCity = (isFa && entry.city_fa) ? entry.city_fa : entry.city
         const photo = entry.media?.photo || 'https://placehold.co/300x300?text=No+Photo'
-        const isSensitive = !!entry.sensitiveMedia;
-        
+        const isSensitive = !!entry.sensitiveMedia
+        const srcCount = sourceCount(entry)
+
         return `
           <div class="list-item-card ${isSensitive ? 'list-item-sensitive' : ''}" data-id="${escapeHTML(entry.id)}">
             <div class="list-item-photo-wrapper">
@@ -169,6 +178,7 @@ function initListView() {
                   <button class="reveal-btn-mini" title="${escapeHTML(t('sensitivity.show'))}">${escapeHTML(t('sensitivity.show'))}</button>
                 </div>
               ` : ''}
+              ${srcCount > 0 ? `<span class="source-count-badge" title="${srcCount} source${srcCount > 1 ? 's' : ''}">${srcCount}</span>` : ''}
             </div>
             <div class="list-item-info">
               <div class="list-item-name">${escapeHTML(displayName)}</div>
@@ -186,17 +196,22 @@ function initListView() {
         </div>
         <div class="list-view-controls">
           <input type="search" id="list-search" class="list-view-search" placeholder="${t('list.search')}" autofocus>
+          <select id="list-sort" class="list-view-sort">
+            <option value="sources-desc">Most Sources</option>
+            <option value="name-asc">Name (A-Z)</option>
+          </select>
         </div>
         <div id="list-grid" class="list-view-grid">
-          ${renderItems(entries)}
+          ${renderItems(sortItems(entries, 'sources-desc'))}
         </div>
       </div>
     `
 
     const searchInput = document.getElementById('list-search') as HTMLInputElement
+    const sortSelect = document.getElementById('list-sort') as HTMLSelectElement
     const grid = document.getElementById('list-grid')!
 
-    searchInput.addEventListener('input', () => {
+    const applyFilters = () => {
       const query = searchInput.value.toLowerCase().trim()
       const filtered = entries.filter(e => {
         const name = (e.name || '').toLowerCase()
@@ -205,8 +220,11 @@ function initListView() {
         const cityFa = (e.city_fa || '').toLowerCase()
         return name.includes(query) || nameFa.includes(query) || city.includes(query) || cityFa.includes(query)
       })
-      grid.innerHTML = renderItems(filtered)
-    })
+      grid.innerHTML = renderItems(sortItems(filtered, sortSelect.value))
+    }
+
+    searchInput.addEventListener('input', applyFilters)
+    sortSelect.addEventListener('change', applyFilters)
 
     grid.addEventListener('click', (e) => {
       const target = e.target as HTMLElement
