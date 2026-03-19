@@ -15,7 +15,7 @@ describe('initTwitter', () => {
   });
 
   it('returns undefined if window is undefined', () => {
-    // @ts-ignore
+    // @ts-expect-error -- test mock override
     delete global.window;
     expect(initTwitter()).toBeUndefined();
   });
@@ -33,9 +33,9 @@ describe('initTwitter', () => {
       createElement: vi.fn()
     };
 
-    // @ts-ignore
+    // @ts-expect-error -- test mock override
     global.window = { twttr: existingTwttr };
-    // @ts-ignore
+    // @ts-expect-error -- test mock override
     global.document = mockDocument;
 
     const result = initTwitter();
@@ -63,9 +63,9 @@ describe('initTwitter', () => {
       createElement: vi.fn().mockReturnValue(mockScriptElement)
     };
 
-    // @ts-ignore
+    // @ts-expect-error -- test mock override
     global.window = {};
-    // @ts-ignore
+    // @ts-expect-error -- test mock override
     global.document = mockDocument;
 
     const result = initTwitter();
@@ -82,8 +82,7 @@ describe('initTwitter', () => {
     expect(typeof result?.ready).toBe('function');
 
     // Verify window.twttr is set
-    // @ts-ignore
-    expect(global.window.twttr).toBe(result);
+    expect((global.window as unknown as Record<string, unknown>)['twttr']).toBe(result);
 
     // Verify ready callback
     const mockCallback = vi.fn();
@@ -103,9 +102,9 @@ describe('initTwitter', () => {
       createElement: vi.fn().mockReturnValue(mockScriptElement)
     };
 
-    // @ts-ignore
+    // @ts-expect-error -- test mock override
     global.window = {};
-    // @ts-ignore
+    // @ts-expect-error -- test mock override
     global.document = mockDocument;
 
     // Should not throw

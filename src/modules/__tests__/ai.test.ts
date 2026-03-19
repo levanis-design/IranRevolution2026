@@ -3,8 +3,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 const globalFetch = global.fetch;
 
 describe('extractMemorialData', () => {
-  let mockFetch: any;
-  let extractMemorialData: any;
+  let mockFetch: ReturnType<typeof vi.fn>;
+  let extractMemorialData: (url: string, content?: string) => Promise<unknown[]>;
 
   beforeEach(async () => {
     vi.resetModules();

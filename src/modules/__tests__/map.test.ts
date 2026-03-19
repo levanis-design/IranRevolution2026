@@ -73,7 +73,7 @@ describe('map module', () => {
 
     mockMarkerClusterGroup.on.mockImplementation((event, cb) => {
       if (event === 'clusterclick') {
-        clusterClickCallback = cb
+        clusterClickCallback = cb as (event: unknown) => void
       }
     })
 
@@ -106,7 +106,7 @@ describe('map module', () => {
     }
 
     if (clusterClickCallback) {
-      clusterClickCallback(mockCluster)
+      (clusterClickCallback as (event: unknown) => void)(mockCluster)
     }
 
     // 5. Assert the callback was called with the correct entries
@@ -119,7 +119,7 @@ describe('map module', () => {
 
     mockMarkerClusterGroup.on.mockImplementation((event, cb) => {
       if (event === 'clusterclick') {
-        clusterClickCallback = cb
+        clusterClickCallback = cb as (event: unknown) => void
       }
       return mockMarkerClusterGroup
     })
@@ -140,7 +140,7 @@ describe('map module', () => {
     }
 
     if (clusterClickCallback) {
-      clusterClickCallback(mockCluster)
+      (clusterClickCallback as (event: unknown) => void)(mockCluster)
     }
 
     expect(mockCb).toHaveBeenCalledTimes(1)

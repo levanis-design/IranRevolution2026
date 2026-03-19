@@ -41,9 +41,6 @@ describe('initInstagram', () => {
   })
 
   it('does nothing when window is undefined', () => {
-    // Save the original window descriptor
-    const originalWindow = globalThis.window;
-
     // Create a spy for document.createElement to ensure it is not called
     const createElementSpy = vi.spyOn(document, 'createElement')
 

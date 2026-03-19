@@ -125,15 +125,26 @@ export async function extractInstagramImage(url: string): Promise<string | null>
 }
 
 /**
+ * To allow mocking in tests
+ */
+export const extractors = {
+  extractXPostImage,
+  extractInstagramImage,
+  extractTelegramImage
+};
+
+/**
  * Extracts the primary image URL from a social media post (X, Instagram, or Telegram).
  */
 export async function extractSocialImage(url: string): Promise<string | null> {
+  if (!url) return null;
+
   if (url.includes('x.com') || url.includes('twitter.com')) {
-    return extractXPostImage(url);
+    return extractors.extractXPostImage(url);
   } else if (url.includes('instagram.com')) {
-    return extractInstagramImage(url);
+    return extractors.extractInstagramImage(url);
   } else if (url.includes('t.me/')) {
-    return extractTelegramImage(url);
+    return extractors.extractTelegramImage(url);
   }
   return null;
 }

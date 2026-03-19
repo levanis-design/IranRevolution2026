@@ -243,107 +243,88 @@ export async function translateMemorialData(data: {
  */
 export async function geocodeLocation(city: string, location: string): Promise<{ lat: number; lon: number } | null> {
   try {
-    if (!OPENROUTER_API_KEY || OPENROUTER_API_KEY === 'sk-or-v1-...') {
-      throw new Error('Invalid OpenRouter API Key.');
-    }
-
-    const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
+    // Try to get coordinates for city + location first
+    const searchQuery = encodeURIComponent(`${location}, ${city}, Iran`);
+    let response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}`, {
       headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': (typeof window !== 'undefined') ? window.location.origin : 'https://iranrevolution2026.github.io',
-        'X-Title': 'Iran Revolution Memorial'
-      },
-      body: JSON.stringify({
-        model: OPENROUTER_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content: `You are an expert geocoding assistant for Iran.
-            Given a city name and a specific location/neighborhood in Iran, find the most accurate Latitude and Longitude.
-            
-            Return ONLY a valid JSON object:
-            {
-              "lat": number,
-              "lon": number
-            }
-
-            If you cannot find the exact location, return the coordinates for the center of the city.
-            Do not include any other text or markdown code blocks.`
-          },
-          {
-            role: 'user',
-            content: `Find coordinates for: ${location}, ${city}, Iran`
-          }
-        ],
-        temperature: 0.1
-      })
+        'User-Agent': 'IranRevolution2026/1.0',
+        'Accept-Language': 'en-US,en;q=0.9,fa;q=0.8'
+      }
     });
 
-    if (!aiResponse.ok) throw new Error('AI Geocoding Service Error');
+    if (!response.ok) throw new Error('Geocoding Service Error');
 
-    const result = await aiResponse.json();
-    const resultText = result.choices[0].message.content.trim();
-    const cleanJson = resultText.replace(/```json|```/g, '').trim();
-    return JSON.parse(cleanJson) as { lat: number; lon: number };
+    let data = await response.json();
+
+    // If no results, try just the city
+    if (!data || data.length === 0) {
+      const cityQuery = encodeURIComponent(`${city}, Iran`);
+      response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${cityQuery}`, {
+        headers: {
+          'User-Agent': 'IranRevolution2026/1.0',
+          'Accept-Language': 'en-US,en;q=0.9,fa;q=0.8'
+        }
+      });
+      if (!response.ok) throw new Error('Geocoding Service Error');
+      data = await response.json();
+    }
+
+    if (data && data.length > 0) {
+      return {
+        lat: parseFloat(data[0].lat),
+        lon: parseFloat(data[0].lon)
+      };
+    }
+
+    return null;
   } catch (error) {
-    console.error('AI Geocoding Error:', error);
+    console.error('Geocoding Error:', error);
     return null;
   }
 }
 
 /**
- * Reverse geocodes coordinates to a location name using AI.
- * Returns { location, city } or null.
+ * Reverse geocodes coordinates to a location name using Nominatim API.
+ * @param lat Latitude
+ * @param lon Longitude
+ * @returns Object with location and city or null
  */
 export async function reverseGeocode(lat: number, lon: number): Promise<{ location: string; city: string } | null> {
   try {
-    if (!OPENROUTER_API_KEY || OPENROUTER_API_KEY === 'sk-or-v1-...') {
-      throw new Error('Invalid OpenRouter API Key.');
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`,
+      {
+        headers: {
+          'Accept-Language': 'en',
+          'User-Agent': 'IranRevolution2026-App/1.0'
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Nominatim API Error: ${response.statusText}`);
     }
 
-    const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': (typeof window !== 'undefined') ? window.location.origin : 'https://iranrevolution2026.github.io',
-        'X-Title': 'Iran Revolution Memorial'
-      },
-      body: JSON.stringify({
-        model: OPENROUTER_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content: `You are an expert reverse geocoding assistant for Iran.
-            Given Latitude and Longitude coordinates, identify the specific neighborhood/location and city in Iran.
+    const data = await response.json();
 
-            Return ONLY a valid JSON object:
-            {
-              "location": "neighborhood or street name",
-              "city": "city name"
-            }
+    if (!data || !data.address) {
+      return null;
+    }
 
-            Do not include any other text or markdown code blocks.`
-          },
-          {
-            role: 'user',
-            content: `What is the location for coordinates: ${lat}, ${lon}?`
-          }
-        ],
-        temperature: 0.1
-      })
-    });
+    const addr = data.address;
 
-    if (!aiResponse.ok) throw new Error('AI Reverse Geocoding Service Error');
+    // Attempt to find the most specific location info available
+    const location = addr.neighbourhood || addr.suburb || addr.quarter || addr.residential || addr.village || addr.road || '';
+    const city = addr.city || addr.town || addr.county || addr.state || '';
 
-    const result = await aiResponse.json();
-    const resultText = result.choices[0].message.content.trim();
-    const cleanJson = resultText.replace(/```json|```/g, '').trim();
-    return JSON.parse(cleanJson) as { location: string; city: string };
+    if (!location && !city) return null;
+
+    return {
+      location: location,
+      city: city
+    };
   } catch (error) {
-    console.error('AI Reverse Geocoding Error:', error);
+    console.error('Reverse Geocoding Error:', error);
     return null;
   }
 }

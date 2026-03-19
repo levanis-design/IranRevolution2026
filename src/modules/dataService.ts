@@ -296,10 +296,10 @@ export async function verifyMemorial(
 }
 
 export async function deleteMemorial(id: string): Promise<{ success: boolean; error?: string }> {
-  if (!supabase) return { success: false, error: 'Supabase not configured' }
-
   try {
-    const { error } = await supabase
+    if (!supabaseAdmin) throw new Error('Admin privileges required')
+
+    const { error } = await supabaseAdmin
       .schema('public')
       .from('memorials')
       .delete()

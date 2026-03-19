@@ -8,7 +8,7 @@ vi.mock('../supabase', () => ({
 
 describe('extractTelegramImage', () => {
   const originalFetch = global.fetch;
-  let mockFetch: any;
+  let mockFetch: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
