@@ -383,12 +383,35 @@ function renderDetails(entry: MemorialEntry) {
         </p>
       </header>
 
-      ${entry.media?.photo ? wrapSensitive(`
-        <figure class="profile-photo">
-          <img src="${escapeHTML(entry.media.photo)}" alt="${escapeHTML(t('details.photoAlt', { name: displayName }))}" loading="lazy" />
-          <figcaption class="photo-attribution">${escapeHTML(t('details.photoAttribution'))}</figcaption>
-        </figure>
-      `, !!entry.sensitiveMedia, 'sensitivity.mediaWarning') : ''}
+      ${(() => {
+        const allPhotos: string[] = []
+        if (entry.media?.photos?.length) {
+          for (const p of entry.media.photos) if (!allPhotos.includes(p)) allPhotos.push(p)
+        } else if (entry.media?.photo) {
+          allPhotos.push(entry.media.photo)
+        }
+        if (!allPhotos.length) return ''
+        const multi = allPhotos.length > 1
+        return wrapSensitive(`
+          <figure class="profile-photo${multi ? ' photo-slider' : ''}" data-slide="0">
+            <div class="photo-track">
+              ${allPhotos.map((src, i) => `
+                <div class="photo-slide${i === 0 ? ' active' : ''}">
+                  <img src="${escapeHTML(src)}" alt="${escapeHTML(t('details.photoAlt', { name: displayName }))} ${i + 1}" loading="${i === 0 ? 'eager' : 'lazy'}" />
+                </div>
+              `).join('')}
+            </div>
+            ${multi ? `
+              <button class="slider-btn slider-prev" aria-label="Previous photo">&#8249;</button>
+              <button class="slider-btn slider-next" aria-label="Next photo">&#8250;</button>
+              <div class="slider-dots">
+                ${allPhotos.map((_, i) => `<span class="slider-dot${i === 0 ? ' active' : ''}" data-index="${i}"></span>`).join('')}
+              </div>
+            ` : ''}
+            <figcaption class="photo-attribution">${escapeHTML(t('details.photoAttribution'))}${multi ? ` · <span class="slide-counter">1 / ${allPhotos.length}</span>` : ''}</figcaption>
+          </figure>
+        `, !!entry.sensitiveMedia, 'sensitivity.mediaWarning')
+      })()}
 
       <div class="profile-bio">
         ${displayBio ? (entry.sensitive ? `
@@ -497,6 +520,37 @@ function renderDetails(entry: MemorialEntry) {
     </article>
   `
   
+  // Setup photo slider
+  const slider = panel.querySelector('.photo-slider') as HTMLElement | null
+  if (slider) {
+    let current = 0
+    const slides = slider.querySelectorAll('.photo-slide')
+    const dots = slider.querySelectorAll('.slider-dot')
+    const counter = slider.querySelector('.slide-counter')
+    const total = slides.length
+
+    const goTo = (index: number) => {
+      slides[current].classList.remove('active')
+      dots[current]?.classList.remove('active')
+      current = (index + total) % total
+      slides[current].classList.add('active')
+      dots[current]?.classList.add('active')
+      if (counter) counter.textContent = `${current + 1} / ${total}`
+    };
+
+    slider.querySelector('.slider-prev')?.addEventListener('click', () => goTo(current - 1))
+    slider.querySelector('.slider-next')?.addEventListener('click', () => goTo(current + 1))
+    dots.forEach((dot, i) => dot.addEventListener('click', () => goTo(i)))
+
+    // Touch swipe
+    let touchX = 0
+    slider.addEventListener('touchstart', (e) => { touchX = (e as TouchEvent).touches[0].clientX }, { passive: true })
+    slider.addEventListener('touchend', (e) => {
+      const diff = touchX - (e as TouchEvent).changedTouches[0].clientX
+      if (Math.abs(diff) > 40) goTo(diff > 0 ? current + 1 : current - 1)
+    }, { passive: true })
+  }
+
   // Setup reveal listeners
   panel.querySelectorAll('.reveal-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {

@@ -14,6 +14,7 @@ export type MemorialEntry = {
   testimonials_fa?: string[]
   media?: {
     photo?: string
+    photos?: string[]
     video?: string
     xPost?: string
     telegramPost?: string

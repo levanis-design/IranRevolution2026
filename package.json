@@ -20,7 +20,8 @@
     "triage-reports": "npx tsx --env-file=.env scripts/triage_reports.ts",
     "sync-images": "npx tsx --env-file=.env scripts/sync_images.ts",
     "fix-missing-photos": "npx tsx --env-file=.env scripts/fix_all_missing_photos.ts",
-    "purge-channel-avatars": "npx tsx --env-file=.env scripts/purge_channel_avatars.ts"
+    "purge-channel-avatars": "npx tsx --env-file=.env scripts/purge_channel_avatars.ts",
+    "fetch-all-photos": "npx tsx --env-file=.env scripts/fetch_all_source_photos.ts"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.21",

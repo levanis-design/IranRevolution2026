@@ -363,6 +363,79 @@ main {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
+/* Photo slider */
+.photo-slider {
+  position: relative;
+}
+
+.photo-track {
+  position: relative;
+}
+
+.photo-slide {
+  display: none;
+}
+
+.photo-slide.active {
+  display: block;
+}
+
+.photo-slide img {
+  border-radius: 12px;
+}
+
+.slider-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.55);
+  border: none;
+  color: #fff;
+  font-size: 1.8rem;
+  line-height: 1;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  transition: background 0.2s;
+  padding: 0;
+}
+
+.slider-btn:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.slider-prev { left: 8px; }
+.slider-next { right: 8px; }
+
+.slider-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.slider-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.slider-dot.active {
+  background: #fff;
+}
+
+.slide-counter {
+  font-weight: 600;
+}
+
 .profile-bio {
   font-size: 1rem;
   line-height: 1.7;
