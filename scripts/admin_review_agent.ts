@@ -1,8 +1,8 @@
-/* eslint-disable no-console */
 import { fetchMemorials, verifyMemorial } from '../src/modules/dataService';
 import type { MemorialEntry } from '../src/modules/types';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { logger } from './utils/logger';
 
 /**
  * Admin AI Agent - Reviews unverified memorial submissions and auto-approves valid ones
@@ -277,7 +277,7 @@ async function validateWithAI(
     // If parsing failed, do a basic rule-based validation
     return basicValidation(memorial, credibility);
   } catch (error) {
-    console.error(`  ⚠️  AI validation error, using rule-based fallback`);
+    logger.error(`  ⚠️  AI validation error, using rule-based fallback`);
     return basicValidation(memorial, credibility);
   }
 }
@@ -360,7 +360,7 @@ async function reviewMemorial(
   auditLog: AuditLogEntry[]
 ): Promise<ReviewResult> {
   if (!memorial.id) {
-    console.log(`  ❌ Error: Memorial missing ID: ${memorial.name}`);
+    logger.error(`  ❌ Error: Memorial missing ID: ${memorial.name}`);
     return {
       id: 'unknown',
       name: memorial.name,
@@ -371,16 +371,16 @@ async function reviewMemorial(
     };
   }
 
-  console.log(`\n📋 Reviewing: ${memorial.name} (${memorial.id})`);
+  logger.info(`\n📋 Reviewing: ${memorial.name} (${memorial.id})`);
 
   // Step 1: Calculate source credibility
   const credibility = calculateCredibility(memorial);
   const emoji = getCredibilityEmoji(credibility.level);
-  console.log(`  ${emoji} Credibility: ${credibility.level.toUpperCase()} - ${credibility.description}`);
+  logger.info(`  ${emoji} Credibility: ${credibility.level.toUpperCase()} - ${credibility.description}`);
 
   // Step 2: Instant approval for high-credibility sources
   if (credibility.level === 'instant') {
-    console.log(`  ⚡ INSTANT APPROVAL - Trusted source`);
+    logger.success(`  ⚡ INSTANT APPROVAL - Trusted source`);
     const result = await verifyMemorial(memorial.id);
 
     const logEntry: AuditLogEntry = {
@@ -398,9 +398,9 @@ async function reviewMemorial(
 
     if (result.success) {
       if (result.merged) {
-        console.log(`  🔄 Merged with existing entry`);
+        logger.info(`  🔄 Merged with existing entry`);
       }
-      console.log(`  ✅ APPROVED`);
+      logger.success(`  ✅ APPROVED`);
       return {
         id: memorial.id,
         name: memorial.name,
@@ -412,7 +412,7 @@ async function reviewMemorial(
         merged: result.merged
       };
     } else {
-      console.log(`  ❌ Approval failed: ${result.error}`);
+      logger.error(`  ❌ Approval failed: ${result.error}`);
       return {
         id: memorial.id,
         name: memorial.name,
@@ -426,7 +426,7 @@ async function reviewMemorial(
   }
 
   // Step 3: AI review for other levels
-  console.log(`  🤖 AI Review (${credibility.level} credibility mode)...`);
+  logger.info(`  🤖 AI Review (${credibility.level} credibility mode)...`);
   const validation = await validateWithAI(memorial, credibility.level);
 
   const logEntry: AuditLogEntry = {
@@ -447,9 +447,9 @@ async function reviewMemorial(
     const result = await verifyMemorial(memorial.id);
 
     if (result.success) {
-      console.log(`  ✅ APPROVED (${validation.confidence} confidence): ${validation.reason}`);
+      logger.success(`  ✅ APPROVED (${validation.confidence} confidence): ${validation.reason}`);
       if (result.merged) {
-        console.log(`  🔄 Merged with existing entry`);
+        logger.info(`  🔄 Merged with existing entry`);
       }
       return {
         id: memorial.id,
@@ -462,7 +462,7 @@ async function reviewMemorial(
         merged: result.merged
       };
     } else {
-      console.log(`  ❌ Approval failed: ${result.error}`);
+      logger.error(`  ❌ Approval failed: ${result.error}`);
       return {
         id: memorial.id,
         name: memorial.name,
@@ -475,9 +475,9 @@ async function reviewMemorial(
     }
   } else {
     // Flag for manual review
-    console.log(`  ⚠️  FLAGGED for manual review (${validation.confidence} confidence): ${validation.reason}`);
+    logger.warn(`  ⚠️  FLAGGED for manual review (${validation.confidence} confidence): ${validation.reason}`);
     if (validation.issues.length > 0) {
-      console.log(`     Issues: ${validation.issues.join(', ')}`);
+      logger.warn(`     Issues: ${validation.issues.join(', ')}`);
     }
     return {
       id: memorial.id,
@@ -507,9 +507,9 @@ function saveAuditLog(auditLog: AuditLogEntry[]): void {
     const logFile = join(logsDir, `admin-review-${timestamp}.json`);
 
     writeFileSync(logFile, JSON.stringify(auditLog, null, 2));
-    console.log(`\n📁 Audit log saved to: ${logFile}`);
+    logger.info(`\n📁 Audit log saved to: ${logFile}`);
   } catch (error) {
-    console.error(`  ⚠️  Failed to save audit log:`, error);
+    logger.error(`  ⚠️  Failed to save audit log:`, error);
   }
 }
 
@@ -517,18 +517,19 @@ function saveAuditLog(auditLog: AuditLogEntry[]): void {
  * Main admin review process
  */
 async function runAdminReview(): Promise<void> {
-  console.log('🤖 Admin AI Agent Starting...');
-  console.log('═══════════════════════════════════════\n');
+  logger.info('🤖 Admin AI Agent Starting...');
+  logger.divider();
+  logger.emptyLine();
 
   // Fetch all memorials (including unverified)
   const allMemorials = await fetchMemorials(true);
   const unverified = allMemorials.filter(m => !m.verified);
 
-  console.log(`📊 Found ${allMemorials.length} total memorials`);
-  console.log(`📝 ${unverified.length} unverified submissions to review\n`);
+  logger.info(`📊 Found ${allMemorials.length} total memorials`);
+  logger.info(`📝 ${unverified.length} unverified submissions to review\n`);
 
   if (unverified.length === 0) {
-    console.log('✨ No submissions to review. All caught up!');
+    logger.success('✨ No submissions to review. All caught up!');
     return;
   }
 
@@ -582,28 +583,29 @@ async function runAdminReview(): Promise<void> {
   saveAuditLog(auditLog);
 
   // Print summary
-  console.log('\n═══════════════════════════════════════');
-  console.log('📊 REVIEW SUMMARY');
-  console.log('═══════════════════════════════════════');
-  console.log(`Total reviewed:       ${stats.total}`);
-  console.log(`⚡ Instant approved:   ${stats.instantApproved}`);
-  console.log(`🤖 AI approved:        ${stats.aiApproved}`);
-  console.log(`🔄 Merged:             ${stats.merged}`);
-  console.log(`⚠️  Manual review:      ${stats.manualReview}`);
-  console.log(`❌ Errors:             ${stats.errors}`);
-  console.log('\n📈 By Credibility Level:');
-  console.log(`  ⚡ Instant (RTN):     ${stats.byCredibility.instant}`);
-  console.log(`  🟢 High:              ${stats.byCredibility.high}`);
-  console.log(`  🟡 Medium:            ${stats.byCredibility.medium}`);
-  console.log(`  🟠 Low:               ${stats.byCredibility.low}`);
-  console.log(`  ⚪ Unknown:           ${stats.byCredibility.unknown}`);
-  console.log('═══════════════════════════════════════');
+  logger.emptyLine();
+  logger.divider();
+  logger.info('📊 REVIEW SUMMARY');
+  logger.divider();
+  logger.info(`Total reviewed:       ${stats.total}`);
+  logger.success(`⚡ Instant approved:   ${stats.instantApproved}`);
+  logger.success(`🤖 AI approved:        ${stats.aiApproved}`);
+  logger.info(`🔄 Merged:             ${stats.merged}`);
+  logger.warn(`⚠️  Manual review:      ${stats.manualReview}`);
+  logger.error(`❌ Errors:             ${stats.errors}`);
+  logger.info('\n📈 By Credibility Level:');
+  logger.info(`  ⚡ Instant (RTN):     ${stats.byCredibility.instant}`);
+  logger.info(`  🟢 High:              ${stats.byCredibility.high}`);
+  logger.info(`  🟡 Medium:            ${stats.byCredibility.medium}`);
+  logger.info(`  🟠 Low:               ${stats.byCredibility.low}`);
+  logger.info(`  ⚪ Unknown:           ${stats.byCredibility.unknown}`);
+  logger.divider();
 
   if (stats.manualReview > 0) {
-    console.log('\n📌 Submissions flagged for manual review need human attention.');
-    console.log('   Check the admin panel to review them.');
+    logger.warn('\n📌 Submissions flagged for manual review need human attention.');
+    logger.warn('   Check the admin panel to review them.');
   }
 }
 
 // Run if called directly
-runAdminReview().catch(console.error);
+runAdminReview().catch(e => logger.error('Fatal error', e));
