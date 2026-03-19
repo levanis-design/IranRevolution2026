@@ -17,10 +17,17 @@ async function fetchAndUploadTelegramImage(url: string): Promise<string | null> 
     if (!response.ok) return null;
     const html = await response.text();
     
+    // Only proceed if the post actually contains a photo/video widget.
+    // Text-only posts set og:image to the channel avatar — we must not use that.
+    const hasPostMedia = html.includes('tgme_widget_message_photo') ||
+                         html.includes('tgme_widget_message_video') ||
+                         html.includes('message_media_photo')
+    if (!hasPostMedia) return null;
+
     // Find og:image (usually a telesco.pe link)
     const ogImageMatch = html.match(/<meta property="og:image" content="(https:\/\/cdn\d+\.telesco\.pe\/file\/[^"]+)"/);
     let imageUrl = ogImageMatch ? ogImageMatch[1] : null;
-    
+
     if (!imageUrl) {
       const telescoMatch = html.match(/https:\/\/cdn\d+\.telesco\.pe\/file\/[^"'\s)]+/);
       imageUrl = telescoMatch ? telescoMatch[0] : null;
