@@ -730,10 +730,11 @@ export async function batchTranslateMemorials(): Promise<BatchResult> {
 }
 
 export async function batchSyncLocationCoords(): Promise<BatchResult> {
-  if (!supabase) return { success: false, count: 0, error: 'Supabase not configured' }
+  const client = supabaseAdmin || supabase
+  if (!client) return { success: false, count: 0, error: 'Supabase not configured' }
 
   try {
-    const { data: memorials, error: fetchError } = await supabase
+    const { data: memorials, error: fetchError } = await client
       .from('memorials')
       .select('*')
 
@@ -741,18 +742,22 @@ export async function batchSyncLocationCoords(): Promise<BatchResult> {
 
     const rows = (memorials || []) as MemorialRow[]
     let updatedCount = 0
+    const bulkUpdates: MemorialRow[] = []
 
     for (const m of rows) {
       const update: MemorialUpdate = {}
       const coords = m.coords as { lat: number; lon: number } | null
+      let apiCalled = false
 
       // Case 1: Has Location but missing/default Coordinates
       if (m.city && m.location && (!coords || (coords.lat === 35.6892 && coords.lon === 51.3890))) {
+        apiCalled = true
         const newCoords = await geocodeLocation(m.city, m.location)
         if (newCoords) update.coords = newCoords
       }
       // Case 2: Has Coordinates but missing Location text
       else if (coords && (!m.location || m.location === '')) {
+        apiCalled = true
         const info = await reverseGeocode(coords.lat, coords.lon)
         if (info) {
           update.location = info.location
@@ -761,9 +766,29 @@ export async function batchSyncLocationCoords(): Promise<BatchResult> {
       }
 
       if (Object.keys(update).length > 0) {
-        const { error: updateError } = await updateMemorial(m.id, update)
-        if (!updateError) updatedCount++
+        bulkUpdates.push({ ...m, ...update } as MemorialRow)
+        updatedCount++
+      }
+
+      if (apiCalled) {
         await new Promise(r => setTimeout(r, 500))
+      }
+    }
+
+    if (bulkUpdates.length > 0) {
+      // Chunk updates in case there are too many (e.g. Supabase limits)
+      const chunkSize = 500
+      for (let i = 0; i < bulkUpdates.length; i += chunkSize) {
+        const chunk = bulkUpdates.slice(i, i + chunkSize)
+        /* eslint-disable @typescript-eslint/no-explicit-any */
+        const { error: bulkError } = await (client as any)
+          .from('memorials')
+          .upsert(chunk)
+        /* eslint-enable @typescript-eslint/no-explicit-any */
+
+        if (bulkError) {
+          console.error('Bulk update error:', bulkError)
+        }
       }
     }
 
