@@ -712,6 +712,7 @@ export async function batchTranslateMemorials(): Promise<BatchResult> {
             // Find the original row to get the missing field's current value
             const originalRow = targets.find(t => t.id === update.id)
             if (originalRow) {
+              /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
               (normalized as any)[key] = originalRow[key as keyof MemorialRow]
             }
           }
