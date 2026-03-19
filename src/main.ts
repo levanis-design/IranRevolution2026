@@ -315,6 +315,25 @@ function initLanguageSwitcher() {
   })
 }
 
+function labelFromUrl(url: string): string {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '')
+    if (host.includes('t.me') || host.includes('telegram')) return 'Telegram'
+    if (host.includes('x.com') || host.includes('twitter.com')) return 'X (Twitter)'
+    if (host.includes('instagram.com')) return 'Instagram'
+    if (host.includes('youtube.com') || host.includes('youtu.be')) return 'YouTube'
+    if (host.includes('facebook.com') || host.includes('fb.com')) return 'Facebook'
+    if (host.includes('hengaw.net')) return 'Hengaw'
+    if (host.includes('iranhr.net')) return 'IranHR'
+    if (host.includes('amnesty.org')) return 'Amnesty International'
+    if (host.includes('iranwire.com')) return 'IranWire'
+    if (host.includes('iranvictims.com')) return 'Iran Victims'
+    return host.split('.')[0].charAt(0).toUpperCase() + host.split('.')[0].slice(1)
+  } catch {
+    return 'Source'
+  }
+}
+
 function renderDetails(entry: MemorialEntry) {
   const panel = document.getElementById('details-content')!
   const isFa = currentLanguage() === 'fa'
@@ -359,8 +378,8 @@ function renderDetails(entry: MemorialEntry) {
         <h2>${escapeHTML(displayName)}</h2>
         <p class="profile-meta">
           <strong>${escapeHTML(t('details.city'))}:</strong> ${escapeHTML(displayCity)}<br>
-          <strong>${escapeHTML(t('details.date'))}:</strong> ${escapeHTML(date)}<br>
-          <strong>${escapeHTML(t('details.location'))}:</strong> ${escapeHTML(displayLocation)}
+          <strong>${escapeHTML(t('details.date'))}:</strong> ${escapeHTML(date)}${displayLocation ? `<br>
+          <strong>${escapeHTML(t('details.location'))}:</strong> ${escapeHTML(displayLocation)}` : ''}
         </p>
       </header>
 
@@ -452,9 +471,10 @@ function renderDetails(entry: MemorialEntry) {
         <section class="profile-references">
           <h3>${escapeHTML(t('details.references'))}</h3>
           <ul>
-            ${entry.references.map(ref => `
-              <li><a href="${escapeHTML(ref.url)}" target="_blank" rel="noopener noreferrer">${escapeHTML(ref.label)}</a></li>
-            `).join('')}
+            ${entry.references.map(ref => {
+              const label = (!ref.label || ref.label === 'Source') ? labelFromUrl(ref.url) : ref.label
+              return `<li><a href="${escapeHTML(ref.url)}" target="_blank" rel="noopener noreferrer">${escapeHTML(label)}</a></li>`
+            }).join('')}
           </ul>
         </section>
       ` : ''}

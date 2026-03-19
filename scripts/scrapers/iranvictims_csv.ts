@@ -134,6 +134,25 @@ function buildBio(csv: CSVRow): string {
   return notes.slice(0, 200);
 }
 
+function labelFromUrl(url: string): string {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '')
+    if (host.includes('t.me') || host.includes('telegram')) return 'Telegram'
+    if (host.includes('x.com') || host.includes('twitter.com')) return 'X (Twitter)'
+    if (host.includes('instagram.com')) return 'Instagram'
+    if (host.includes('youtube.com') || host.includes('youtu.be')) return 'YouTube'
+    if (host.includes('facebook.com') || host.includes('fb.com')) return 'Facebook'
+    if (host.includes('hengaw.net')) return 'Hengaw'
+    if (host.includes('iranhr.net')) return 'IranHR'
+    if (host.includes('amnesty.org')) return 'Amnesty International'
+    if (host.includes('iranwire.com')) return 'IranWire'
+    // Capitalize first segment of domain
+    return host.split('.')[0].charAt(0).toUpperCase() + host.split('.')[0].slice(1)
+  } catch {
+    return 'Source'
+  }
+}
+
 function buildReferences(csv: CSVRow): { label: string; url: string }[] {
   const refs: { label: string; url: string }[] = [];
 
@@ -149,7 +168,7 @@ function buildReferences(csv: CSVRow): { label: string; url: string }[] {
       .map(u => u.trim())
       .filter(u => u.startsWith('http'));
     for (const url of urls) {
-      refs.push({ label: 'Source', url });
+      refs.push({ label: labelFromUrl(url), url });
     }
   }
 
