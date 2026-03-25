@@ -21,6 +21,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Create empty .env file
+        run: touch .env
+
       - name: Create backup
         run: npx tsx --env-file=.env backup_data.ts
         env:
