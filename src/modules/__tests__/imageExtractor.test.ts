@@ -42,7 +42,7 @@ describe('extractTelegramImage', () => {
         if (url === telegramUrl) {
           return {
             ok: true,
-            text: async () => `<html><meta property="og:image" content="${telescoUrl}"></html>`
+            text: async () => `<html><div class="tgme_widget_message_photo"></div><meta property="og:image" content="${telescoUrl}"></html>`
           };
         }
         if (url === telescoUrl) {
@@ -75,7 +75,7 @@ describe('extractTelegramImage', () => {
         if (url === telegramUrl) {
           return {
             ok: true,
-            text: async () => `<html><body>Some text ${telescoUrl} more text</body></html>`
+            text: async () => `<html><body><div class="tgme_widget_message_photo"></div>Some text ${telescoUrl} more text</body></html>`
           };
         }
         if (url === telescoUrl) {
@@ -124,7 +124,7 @@ describe('extractTelegramImage', () => {
         if (url === telegramUrl) {
           return {
             ok: true,
-            text: async () => `<html><meta property="og:image" content="${telescoUrl}"></html>`
+            text: async () => `<html><div class="tgme_widget_message_photo"></div><meta property="og:image" content="${telescoUrl}"></html>`
           };
         }
         if (url === telescoUrl) {
@@ -153,7 +153,7 @@ describe('extractTelegramImage', () => {
         if (url === telegramUrl) {
           return {
             ok: true,
-            text: async () => `<html><meta property="og:image" content="${telescoUrl}"></html>`
+            text: async () => `<html><div class="tgme_widget_message_photo"></div><meta property="og:image" content="${telescoUrl}"></html>`
           };
         }
         if (url === telescoUrl) {
