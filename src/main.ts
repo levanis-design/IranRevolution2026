@@ -26,6 +26,7 @@ async function boot() {
   initContributionForm()
   initFiguresPopup()
   initMobileMenu()
+  handleImageErrors()
 
   // Fetch memorials
   const memorials = await fetchMemorials()
@@ -90,6 +91,20 @@ function setupRealtime() {
       })
     })
     .subscribe()
+}
+
+function handleImageErrors() {
+  document.addEventListener('error', (e) => {
+    const target = e.target as HTMLElement;
+    if (target && target.tagName === 'IMG') {
+      const img = target as HTMLImageElement;
+      // Prevent infinite loops if the placeholder itself fails to load
+      const placeholder = 'https://placehold.co/300x300?text=No+Photo';
+      if (img.src !== placeholder) {
+        img.src = placeholder;
+      }
+    }
+  }, true); // useCapture must be true for error events
 }
 
 function initMobileMenu() {
