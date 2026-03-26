@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractXStatusUrls } from '../urlHelpers';
+import { extractXStatusUrls, isDirectContentLink, parseUrlType } from '../urlHelpers';
 
 describe('urlHelpers', () => {
   describe('extractXStatusUrls', () => {
@@ -86,5 +86,49 @@ describe('urlHelpers', () => {
         'https://x.com/user_name/status/2'
       ]);
     });
+  });
+});
+
+describe('isDirectContentLink', () => {
+  it('should return true for URLs containing /status/', () => {
+    expect(isDirectContentLink('https://twitter.com/user/status/1234567890')).toBe(true);
+    expect(isDirectContentLink('https://x.com/user/status/1234567890')).toBe(true);
+  });
+
+  it('should return true for URLs containing /news/', () => {
+    expect(isDirectContentLink('https://example.com/news/article-title')).toBe(true);
+  });
+
+  it('should return true for URLs containing /article/', () => {
+    expect(isDirectContentLink('https://example.com/article/123')).toBe(true);
+  });
+
+  it('should return false for URLs without specific paths', () => {
+    expect(isDirectContentLink('https://twitter.com/user')).toBe(false);
+    expect(isDirectContentLink('https://example.com/about')).toBe(false);
+    expect(isDirectContentLink('https://t.me/somechannel')).toBe(false);
+    expect(isDirectContentLink('')).toBe(false);
+  });
+});
+
+describe('parseUrlType', () => {
+  it('should identify x.com URLs', () => {
+    const result = parseUrlType('https://x.com/username/status/123456');
+    expect(result).toEqual({ url: 'https://x.com/username/status/123456', type: 'x', platform: 'X' });
+  });
+
+  it('should identify twitter.com URLs and replace them with x.com', () => {
+    const result = parseUrlType('https://twitter.com/username/status/123456');
+    expect(result).toEqual({ url: 'https://x.com/username/status/123456', type: 'x', platform: 'X' });
+  });
+
+  it('should identify t.me URLs', () => {
+    const result = parseUrlType('https://t.me/channelname/1234');
+    expect(result).toEqual({ url: 'https://t.me/channelname/1234', type: 'telegram', platform: 'Telegram' });
+  });
+
+  it('should categorize unknown platforms as other', () => {
+    const result = parseUrlType('https://example.com/article/123');
+    expect(result).toEqual({ url: 'https://example.com/article/123', type: 'other', platform: 'Other' });
   });
 });
