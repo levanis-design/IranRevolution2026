@@ -593,10 +593,11 @@ interface BatchResult {
 }
 
 export async function batchUpdateImages(): Promise<BatchResult> {
-  if (!supabase) return { success: false, count: 0, error: 'Supabase not configured' }
+  const client = supabaseAdmin || supabase
+  if (!client) return { success: false, count: 0, error: 'Supabase not configured' }
 
   try {
-    const { data: memorials, error: fetchError } = await supabase
+    const { data: memorials, error: fetchError } = await client
       .from('memorials')
       .select('*')
 
@@ -613,6 +614,7 @@ export async function batchUpdateImages(): Promise<BatchResult> {
     if (targets.length === 0) return { success: true, count: 0 }
 
     let updatedCount = 0
+    const bulkUpdates: MemorialRow[] = []
     const CONCURRENCY_LIMIT = 5
 
     for (let i = 0; i < targets.length; i += CONCURRENCY_LIMIT) {
@@ -630,16 +632,31 @@ export async function batchUpdateImages(): Promise<BatchResult> {
 
         if (photo) {
           const updatedMedia = { ...media, photo }
-          const { error: updateError } = await updateMemorial(m.id, { media: updatedMedia })
-          if (!updateError) {
-            updatedCount++
-          }
+          bulkUpdates.push({ ...m, media: updatedMedia })
         }
       }))
 
       // Keep a small delay between batches to be respectful to rate limits, but significantly faster
       if (i + CONCURRENCY_LIMIT < targets.length) {
         await new Promise(r => setTimeout(r, 500))
+      }
+    }
+
+    if (bulkUpdates.length > 0) {
+      const chunkSize = 500
+      for (let i = 0; i < bulkUpdates.length; i += chunkSize) {
+        const chunk = bulkUpdates.slice(i, i + chunkSize)
+        /* eslint-disable @typescript-eslint/no-explicit-any */
+        const { error: bulkError } = await (client as any)
+          .from('memorials')
+          .upsert(chunk)
+        /* eslint-enable @typescript-eslint/no-explicit-any */
+
+        if (bulkError) {
+          console.error('Bulk update error:', bulkError)
+        } else {
+          updatedCount += chunk.length
+        }
       }
     }
 
