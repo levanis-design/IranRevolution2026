@@ -99,8 +99,8 @@ function handleImageErrors() {
     if (target && target.tagName === 'IMG') {
       const img = target as HTMLImageElement;
       // Prevent infinite loops if the placeholder itself fails to load
-      const placeholder = 'https://placehold.co/300x300?text=No+Photo';
-      if (img.src !== placeholder) {
+      const placeholder = '/lion.png';
+      if (!img.src.includes('/lion.png')) {
         img.src = placeholder;
       }
     }
@@ -179,7 +179,7 @@ function initListView() {
       return items.map(entry => {
         const displayName = (isFa && entry.name_fa) ? entry.name_fa : entry.name
         const displayCity = (isFa && entry.city_fa) ? entry.city_fa : entry.city
-        const photo = entry.media?.photo || 'https://placehold.co/300x300?text=No+Photo'
+        const photo = entry.media?.photo || '/lion.png'
         const isSensitive = !!entry.sensitiveMedia
         const srcCount = sourceCount(entry)
 
