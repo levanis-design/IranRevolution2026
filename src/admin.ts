@@ -10,7 +10,8 @@ import {
   batchSyncLocationCoords,
   fetchReports,
   updateReportStatus,
-  deleteReport
+  deleteReport,
+  findDuplicateMemorialClient
 } from './modules/dataService'
 import type { ReportRow } from './modules/dataService'
 import { extractMemorialData, geocodeLocation } from './modules/ai'
@@ -622,56 +623,10 @@ function editEntry(id: string) {
 }
 
 function checkDuplicate(name: string, city?: string, name_fa?: string) {
-  const normalizedName = name?.toLowerCase().trim() || ''
-  const currentNameFa = name_fa?.trim() || (document.getElementById('name_fa') as HTMLInputElement)?.value.trim()
+  const currentNameFa = name_fa?.trim() || (document.getElementById('name_fa') as HTMLInputElement)?.value.trim() || ''
   const currentCity = city?.toLowerCase().trim() || (document.getElementById('city') as HTMLInputElement)?.value.toLowerCase().trim()
 
-  if (normalizedName.length < 3 && currentNameFa.length < 3) {
-    duplicateWarning.classList.add('hidden')
-    return
-  }
-  
-  const nameParts = normalizedName.split(/\s+/).filter(p => p.length > 2)
-  const nameFaParts = currentNameFa.split(/\s+/).filter(p => p.length > 1)
-  
-  // Common prefixes to ignore in partial matches
-  const commonPrefixes = ['syed', 'seyyed', 'sayyid', 'mir', 'haji', 'haj', 'mullah', 'sheikh']
-  const filteredParts = nameParts.filter(p => !commonPrefixes.includes(p))
-
-  const match = allMemorials.find(m => {
-    if (m.id === editIdInput.value) return false
-    
-    const mName = m.name.toLowerCase().trim()
-    const mNameFa = (m.name_fa || '').trim()
-    const mCity = m.city.toLowerCase().trim()
-    const mLocation = (m.location || '').toLowerCase().trim()
-
-    // 1. Exact match (High Confidence) - English or Persian
-    // Only definitive duplicate if city also matches or is unknown
-    const namesMatch = (normalizedName && mName === normalizedName) || (currentNameFa && mNameFa === currentNameFa)
-    const citiesMatch = !currentCity || !mCity || mCity === currentCity
-    if (namesMatch && citiesMatch) return true
-
-    // 2. Persian Partial Match (High Confidence)
-    // Persian spellings are more consistent than English transliterations
-    if (nameFaParts.length >= 2) {
-      const faMatch = nameFaParts.every(part => mNameFa.includes(part))
-      if (faMatch) return true
-    }
-
-    // 3. Significant English Name Parts + Location (Medium Confidence)
-    if (filteredParts.length >= 2 && currentCity) {
-      const nameMatch = filteredParts.every(part => mName.includes(part))
-      const cityMatch = mCity.includes(currentCity) || currentCity.includes(mCity) || mLocation.includes(currentCity)
-      if (nameMatch && cityMatch) return true
-    }
-
-    // 4. Full include match (Medium Confidence)
-    if (normalizedName.length > 10 && mName.includes(normalizedName)) return true
-    if (currentNameFa.length > 5 && mNameFa.includes(currentNameFa)) return true
-
-    return false
-  })
+  const match = findDuplicateMemorialClient(allMemorials, name, currentCity, currentNameFa, editIdInput.value)
 
   if (match) {
     duplicateWarning.innerHTML = `
