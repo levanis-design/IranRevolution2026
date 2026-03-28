@@ -8,6 +8,134 @@ export interface ExtractedMemorialData extends Partial<MemorialEntry> {
   photo?: string; // Sometimes returned as photo directly
 }
 
+async function fetchPageContent(url: string): Promise<string> {
+  // Optimization: Use /embed/captioned/ for Instagram to bypass login walls
+  let targetUrl = url;
+  if (url.includes('instagram.com')) {
+    const cleanUrl = url.split('?')[0].replace(/\/$/, '');
+    targetUrl = `${cleanUrl}/embed/captioned/`;
+  } else if (url.includes('t.me/') && !url.includes('?embed=')) {
+    targetUrl = url.includes('?') ? `${url}&embed=1` : `${url}?embed=1`;
+  }
+
+  const readerUrl = `https://r.jina.ai/${targetUrl}`;
+
+  const response = await fetch(readerUrl, {
+    headers: {
+      'X-No-Cache': 'true',
+      'X-With-Images-Summary': 'true',
+      'Accept': 'text/plain'
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to read the source URL. Jina said: ${response.statusText}`);
+  }
+
+  const content = await response.text();
+
+  // Basic check for empty or blocked content
+  if (!content || content.length < 100 || content.includes('Login • Instagram')) {
+    throw new Error('ai.error.blocked');
+  }
+
+  return content;
+}
+
+async function callOpenRouterAI(content: string): Promise<Response> {
+  return await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': (typeof window !== 'undefined') ? window.location.origin : 'https://iranrevolution2026.github.io',
+        'X-Title': 'Iran Revolution Memorial'
+      },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert data extractor for a human rights memorial website dedicated to the Iranian revolution.
+          Extract information about ALL victims (those killed, arrested, or executed) specifically of the Iranian revolution/protests mentioned in the provided text.
+
+          CRITICAL RELEVANCY RULES:
+          1. ONLY extract victims of the Iranian protests or human rights violations by the Islamic Republic of Iran.
+          2. DO NOT extract political leaders, international figures, or people from other conflicts (e.g., Saudi Arabia, Syria, Lebanon) unless they are directly mentioned as victims of the Iranian revolution.
+          3. If the text is a news report about general Middle East politics and doesn't mention specific Iranian victims, return an empty array [].
+          4. If no clear victims are found, return [].
+          5. For Instagram/Social Media: The text might be in the caption, description, or even alt text of images. Look for names (usually starting with # or at the beginning of the caption), cities, and dates.
+          6. If you see a name like "Shayan Shekari" and a city like "Rasht", even if the text is short, extract it.
+          7. For Telegram @RememberTheirNames channel: The format is usually a counter number, followed by the Name, then location and date. For example: "1481. Sajjad Hosseinpour \n 18 Jan 2026 Shahriar". Extract "Sajjad Hosseinpour" as the name, "Shahriar" as the city/location, and "2026-01-18" as the date.
+
+          ETHICAL DATA HANDLING RULES (See CARE_PROTOCOL.md):
+          1. DO NOT invent or infer missing names, dates, or causes of death.
+          2. If information is uncertain, leave it empty or mark it as uncertain.
+          3. Prioritize safety and redaction: avoid extracting home addresses or identifiable info about living relatives.
+          4. Treat social media sources as potentially unverified.
+
+          BILINGUAL RULES:
+          1. The "name", "city", "location", and "bio" fields MUST be in English. If the source text is in Persian, translate these to English.
+          2. The "name_fa", "city_fa", "location_fa", and "bio_fa" fields MUST be in Persian (Farsi). If the source text is in English, translate these to Persian.
+          3. Ensure names are spelled correctly in both languages.
+
+          DATE CORRECTION RULES:
+          1. If the text mentions "December 2025" as the date of death/incident, change it to "January 2026" (specifically around 2026-01-09).
+          2. If the date cannot be explicitly extracted from the text, use the DEFAULT date: "2026-01-09".
+
+          Return ONLY a valid JSON array of objects with the following fields:
+          - name: Full Name (in English)
+          - name_fa: Full Name (in Persian)
+          - city: City name (in English)
+          - city_fa: City name (in Persian)
+          - date: YYYY-MM-DD format (Default: "2026-01-09" if not found)
+          - location: Specific location or neighborhood (in English)
+          - location_fa: Specific location or neighborhood (in Persian)
+          - bio: Brief biography (max 200 characters, in English)
+          - bio_fa: Brief biography (max 200 characters, in Persian)
+          - photo: The URL of the main image attached to the post or specifically for this victim
+          - referenceLabel: Source name (e.g. BBC, X Post, IHRDC, Hengaw)
+          - coords: { "lat": number, "lon": number } (Most accurate coordinates for the location and city)
+
+          If a field is missing, use an empty string. If coords are unknown, use default Tehran center { "lat": 35.6892, "lon": 51.3890 }.
+          Do not include any other text or markdown code blocks. Return ONLY the JSON array.`
+        },
+        {
+          role: 'user',
+          content: `Extract data for all victims from this source: ${content}`
+        }
+      ],
+      temperature: 0.1 // Keep it deterministic
+    })
+  });
+}
+
+async function parseAIResponse(aiResponse: Response): Promise<ExtractedMemorialData[]> {
+  if (!aiResponse.ok) {
+    const aiErr = await aiResponse.json().catch(() => ({ error: { message: aiResponse.statusText } }));
+    const msg = aiErr.error?.message || aiResponse.statusText;
+
+    if (msg.includes('cookie') || aiResponse.status === 401) {
+      throw new Error(`AI Auth Error: The selected model is currently unavailable or your API key is invalid. Please try again or check your OpenRouter dashboard.`);
+    }
+
+    throw new Error(`AI Service Error: ${msg}`);
+  }
+
+  const data = await aiResponse.json();
+
+  const resultText = data.choices[0].message.content.trim();
+
+  try {
+    // Robust JSON parsing (strip markdown if model ignores instructions)
+    const cleanJson = resultText.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(cleanJson);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch (parseError) {
+    throw new Error('The AI returned an invalid format. Please try again.');
+  }
+}
+
 export async function extractMemorialData(url: string, providedContent?: string): Promise<ExtractedMemorialData[]> {
   try {
     if (!OPENROUTER_API_KEY || OPENROUTER_API_KEY === 'sk-or-v1-...') {
@@ -18,35 +146,7 @@ export async function extractMemorialData(url: string, providedContent?: string)
     
     if (!content) {
       // Step 1: Fetch URL content as Markdown using Jina Reader API
-      // Optimization: Use /embed/captioned/ for Instagram to bypass login walls
-      let targetUrl = url;
-      if (url.includes('instagram.com')) {
-        const cleanUrl = url.split('?')[0].replace(/\/$/, '');
-        targetUrl = `${cleanUrl}/embed/captioned/`;
-      } else if (url.includes('t.me/') && !url.includes('?embed=')) {
-        targetUrl = url.includes('?') ? `${url}&embed=1` : `${url}?embed=1`;
-      }
-
-      const readerUrl = `https://r.jina.ai/${targetUrl}`;
-      
-      const response = await fetch(readerUrl, {
-        headers: {
-          'X-No-Cache': 'true',
-          'X-With-Images-Summary': 'true',
-          'Accept': 'text/plain'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to read the source URL. Jina said: ${response.statusText}`);
-      }
-      
-      content = await response.text();
-      
-      // Basic check for empty or blocked content
-      if (!content || content.length < 100 || content.includes('Login • Instagram')) {
-        throw new Error('ai.error.blocked');
-      }
+      content = await fetchPageContent(url);
     }
 
     // Truncate content to avoid token limits
@@ -55,95 +155,10 @@ export async function extractMemorialData(url: string, providedContent?: string)
     }
 
     // Step 2: Use OpenRouter AI to parse the content
-    const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': (typeof window !== 'undefined') ? window.location.origin : 'https://iranrevolution2026.github.io',
-          'X-Title': 'Iran Revolution Memorial'
-        },
-      body: JSON.stringify({
-        model: OPENROUTER_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content: `You are an expert data extractor for a human rights memorial website dedicated to the Iranian revolution. 
-            Extract information about ALL victims (those killed, arrested, or executed) specifically of the Iranian revolution/protests mentioned in the provided text.
-            
-            CRITICAL RELEVANCY RULES:
-            1. ONLY extract victims of the Iranian protests or human rights violations by the Islamic Republic of Iran.
-            2. DO NOT extract political leaders, international figures, or people from other conflicts (e.g., Saudi Arabia, Syria, Lebanon) unless they are directly mentioned as victims of the Iranian revolution.
-            3. If the text is a news report about general Middle East politics and doesn't mention specific Iranian victims, return an empty array [].
-            4. If no clear victims are found, return [].
-            5. For Instagram/Social Media: The text might be in the caption, description, or even alt text of images. Look for names (usually starting with # or at the beginning of the caption), cities, and dates. 
-            6. If you see a name like "Shayan Shekari" and a city like "Rasht", even if the text is short, extract it.
-            7. For Telegram @RememberTheirNames channel: The format is usually a counter number, followed by the Name, then location and date. For example: "1481. Sajjad Hosseinpour \n 18 Jan 2026 Shahriar". Extract "Sajjad Hosseinpour" as the name, "Shahriar" as the city/location, and "2026-01-18" as the date.
-            
-            ETHICAL DATA HANDLING RULES (See CARE_PROTOCOL.md):
-            1. DO NOT invent or infer missing names, dates, or causes of death.
-            2. If information is uncertain, leave it empty or mark it as uncertain.
-            3. Prioritize safety and redaction: avoid extracting home addresses or identifiable info about living relatives.
-            4. Treat social media sources as potentially unverified.
+    const aiResponse = await callOpenRouterAI(content);
 
-            BILINGUAL RULES:
-            1. The "name", "city", "location", and "bio" fields MUST be in English. If the source text is in Persian, translate these to English.
-            2. The "name_fa", "city_fa", "location_fa", and "bio_fa" fields MUST be in Persian (Farsi). If the source text is in English, translate these to Persian.
-            3. Ensure names are spelled correctly in both languages.
-            
-            DATE CORRECTION RULES:
-            1. If the text mentions "December 2025" as the date of death/incident, change it to "January 2026" (specifically around 2026-01-09).
-            2. If the date cannot be explicitly extracted from the text, use the DEFAULT date: "2026-01-09".
-
-            Return ONLY a valid JSON array of objects with the following fields:
-            - name: Full Name (in English)
-            - name_fa: Full Name (in Persian)
-            - city: City name (in English)
-            - city_fa: City name (in Persian)
-            - date: YYYY-MM-DD format (Default: "2026-01-09" if not found)
-            - location: Specific location or neighborhood (in English)
-            - location_fa: Specific location or neighborhood (in Persian)
-            - bio: Brief biography (max 200 characters, in English)
-            - bio_fa: Brief biography (max 200 characters, in Persian)
-            - photo: The URL of the main image attached to the post or specifically for this victim
-            - referenceLabel: Source name (e.g. BBC, X Post, IHRDC, Hengaw)
-            - coords: { "lat": number, "lon": number } (Most accurate coordinates for the location and city)
-
-            If a field is missing, use an empty string. If coords are unknown, use default Tehran center { "lat": 35.6892, "lon": 51.3890 }.
-            Do not include any other text or markdown code blocks. Return ONLY the JSON array.`
-          },
-          {
-            role: 'user',
-            content: `Extract data for all victims from this source: ${content}`
-          }
-        ],
-        temperature: 0.1 // Keep it deterministic
-      })
-    });
-
-    if (!aiResponse.ok) {
-      const aiErr = await aiResponse.json().catch(() => ({ error: { message: aiResponse.statusText } }));
-      const msg = aiErr.error?.message || aiResponse.statusText;
-      
-      if (msg.includes('cookie') || aiResponse.status === 401) {
-        throw new Error(`AI Auth Error: The selected model is currently unavailable or your API key is invalid. Please try again or check your OpenRouter dashboard.`);
-      }
-      
-      throw new Error(`AI Service Error: ${msg}`);
-    }
-
-    const data = await aiResponse.json();
-    
-    const resultText = data.choices[0].message.content.trim();
-    
-    try {
-      // Robust JSON parsing (strip markdown if model ignores instructions)
-      const cleanJson = resultText.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(cleanJson);
-      return Array.isArray(parsed) ? parsed : [parsed];
-    } catch (parseError) {
-      throw new Error('The AI returned an invalid format. Please try again.');
-    }
+    // Step 3: Parse AI Response
+    return await parseAIResponse(aiResponse);
   } catch (error) {
     console.error('AI Extraction Error Detail:', error);
     throw error;
