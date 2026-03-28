@@ -1,38 +1,156 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { setupSearch } from '../search'
 import type { MemorialEntry } from '../types'
 
-function filter(all: MemorialEntry[], q: string, city?: string, year?: number) {
-  const query = q.trim().toLowerCase()
-  const cityQ = (city ?? '').trim().toLowerCase()
-  return all.filter((e) => {
-    const matchesQ =
-      !query ||
-      e.name.toLowerCase().includes(query) ||
-      e.city.toLowerCase().includes(query) ||
-      e.location.toLowerCase().includes(query) ||
-      (e.bio ?? '').toLowerCase().includes(query)
-    const matchesCity = !cityQ || e.city.toLowerCase().includes(cityQ)
-    const matchesYear = !year || new Date(e.date).getFullYear() === year
-    return matchesQ && matchesCity && matchesYear
-  })
-}
-
-describe('search filter', () => {
+describe('setupSearch', () => {
   const data: MemorialEntry[] = [
-    { id: '1', name: 'Ali', city: 'Tehran', location: 'Tehran', date: '2022-11-01', coords: { lat: 35.6, lon: 51.4 } },
-    { id: '2', name: 'Sara', city: 'Shiraz', location: 'Shiraz', date: '2022-10-01', coords: { lat: 29.5, lon: 52.5 } },
+    {
+      id: '1',
+      name: 'Ali',
+      name_fa: 'علی',
+      city: 'Tehran',
+      city_fa: 'تهران',
+      location: 'Square',
+      location_fa: 'میدان',
+      date: '2022-11-01',
+      bio: 'student',
+      bio_fa: 'دانشجو'
+    },
+    {
+      id: '2',
+      name: 'Sara',
+      name_fa: 'سارا',
+      city: 'Shiraz',
+      city_fa: 'شیراز',
+      location: 'Street',
+      location_fa: 'خیابان',
+      date: '2022-10-01',
+      bio: 'artist',
+      bio_fa: 'هنرمند'
+    },
+    {
+      id: '3',
+      name: 'Unknown',
+      city: 'Nowhere',
+      location: 'Nowhere',
+      date: '2023-01-01',
+      // Testing entries with undefined optional fields
+    }
   ]
 
-  it('matches by name', () => {
-    expect(filter(data, 'ali').length).toBe(1)
+  let onResultsMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    // Reset DOM
+    document.body.innerHTML = '<input id="search-input" />'
+    onResultsMock = vi.fn()
   })
 
-  it('filters by city', () => {
-    expect(filter(data, '', 'shiraz').length).toBe(1)
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
-  it('filters by year', () => {
-    expect(filter(data, '', '', 2022).length).toBe(2)
-    expect(filter(data, '', '', 2023).length).toBe(0)
+  it('should return immediately if search input is missing', () => {
+    document.body.innerHTML = '' // Remove input
+    setupSearch(data, onResultsMock)
+    expect(onResultsMock).not.toHaveBeenCalled()
+  })
+
+  it('should call onResults immediately with all data when initialized', () => {
+    setupSearch(data, onResultsMock)
+    expect(onResultsMock).toHaveBeenCalledTimes(1)
+    expect(onResultsMock).toHaveBeenCalledWith(data)
+  })
+
+  it('should filter by name (English and Persian)', () => {
+    setupSearch(data, onResultsMock)
+    const input = document.getElementById('search-input') as HTMLInputElement
+
+    input.value = 'ali'
+    input.dispatchEvent(new Event('input'))
+    expect(onResultsMock).toHaveBeenLastCalledWith([data[0]])
+
+    input.value = 'سارا'
+    input.dispatchEvent(new Event('input'))
+    expect(onResultsMock).toHaveBeenLastCalledWith([data[1]])
+  })
+
+  it('should filter by city (English and Persian)', () => {
+    setupSearch(data, onResultsMock)
+    const input = document.getElementById('search-input') as HTMLInputElement
+
+    input.value = 'shiraz'
+    input.dispatchEvent(new Event('input'))
+    expect(onResultsMock).toHaveBeenLastCalledWith([data[1]])
+
+    input.value = 'تهران'
+    input.dispatchEvent(new Event('input'))
+    expect(onResultsMock).toHaveBeenLastCalledWith([data[0]])
+  })
+
+  it('should filter by location (English and Persian)', () => {
+    setupSearch(data, onResultsMock)
+    const input = document.getElementById('search-input') as HTMLInputElement
+
+    input.value = 'square'
+    input.dispatchEvent(new Event('input'))
+    expect(onResultsMock).toHaveBeenLastCalledWith([data[0]])
+
+    input.value = 'خیابان'
+    input.dispatchEvent(new Event('input'))
+    expect(onResultsMock).toHaveBeenLastCalledWith([data[1]])
+  })
+
+  it('should filter by bio (English and Persian)', () => {
+    setupSearch(data, onResultsMock)
+    const input = document.getElementById('search-input') as HTMLInputElement
+
+    input.value = 'student'
+    input.dispatchEvent(new Event('input'))
+    expect(onResultsMock).toHaveBeenLastCalledWith([data[0]])
+
+    input.value = 'هنرمند'
+    input.dispatchEvent(new Event('input'))
+    expect(onResultsMock).toHaveBeenLastCalledWith([data[1]])
+  })
+
+  it('should handle undefined fields gracefully', () => {
+    setupSearch(data, onResultsMock)
+    const input = document.getElementById('search-input') as HTMLInputElement
+
+    input.value = 'unknown'
+    input.dispatchEvent(new Event('input'))
+    expect(onResultsMock).toHaveBeenLastCalledWith([data[2]])
+  })
+
+  it('should return all results if input is cleared', () => {
+    setupSearch(data, onResultsMock)
+    const input = document.getElementById('search-input') as HTMLInputElement
+
+    input.value = 'ali'
+    input.dispatchEvent(new Event('input'))
+    expect(onResultsMock).toHaveBeenLastCalledWith([data[0]])
+
+    input.value = '  '
+    input.dispatchEvent(new Event('input'))
+    expect(onResultsMock).toHaveBeenLastCalledWith(data)
+  })
+
+  it('should remove old event listener if setupSearch is called multiple times', () => {
+    setupSearch(data, onResultsMock)
+    // Initial call makes 1 invocation
+    expect(onResultsMock).toHaveBeenCalledTimes(1)
+
+    // Call it again
+    setupSearch(data, onResultsMock)
+    // Second initialization makes another invocation
+    expect(onResultsMock).toHaveBeenCalledTimes(2)
+
+    const input = document.getElementById('search-input') as HTMLInputElement
+    input.value = 'ali'
+    input.dispatchEvent(new Event('input'))
+
+    // The event listener should only fire ONCE, meaning 3 total calls
+    expect(onResultsMock).toHaveBeenCalledTimes(3)
   })
 })
