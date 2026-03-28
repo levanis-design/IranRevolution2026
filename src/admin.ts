@@ -1,4 +1,5 @@
 import { supabase } from './modules/supabase'
+import { logger } from './modules/logger'
 import { 
   fetchMemorials, 
   verifyMemorial, 
@@ -234,7 +235,7 @@ async function handleRefreshReports() {
 async function refreshReportsData() {
   const { data, error } = await fetchReports()
   if (error) {
-    console.error('Error fetching reports:', error)
+    logger.error('Error fetching reports:', error)
     return { error: { message: error } }
   }
   allReports = data || []

@@ -1,4 +1,5 @@
 import type { MemorialEntry } from './types';
+import { logger } from './logger';
 
 const OPENROUTER_API_KEY = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env.VITE_OPENROUTER_API_KEY : process.env.VITE_OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = (typeof import.meta !== 'undefined' && import.meta.env) ? (import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free') : (process.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free');
@@ -160,7 +161,7 @@ export async function extractMemorialData(url: string, providedContent?: string)
     // Step 3: Parse AI Response
     return await parseAIResponse(aiResponse);
   } catch (error) {
-    console.error('AI Extraction Error Detail:', error);
+    logger.error('AI Extraction Error Detail:', error);
     throw error;
   }
 }
@@ -247,7 +248,7 @@ export async function translateMemorialData(data: {
     const cleanJson = resultText.replace(/```json|```/g, '').trim();
     return JSON.parse(cleanJson);
   } catch (error) {
-    console.error('AI Translation Error:', error);
+    logger.error('AI Translation Error:', error);
     return null;
   }
 }
@@ -293,7 +294,7 @@ export async function geocodeLocation(city: string, location: string): Promise<{
 
     return null;
   } catch (error) {
-    console.error('Geocoding Error:', error);
+    logger.error('Geocoding Error:', error);
     return null;
   }
 }
@@ -339,7 +340,7 @@ export async function reverseGeocode(lat: number, lon: number): Promise<{ locati
       city: city
     };
   } catch (error) {
-    console.error('Reverse Geocoding Error:', error);
+    logger.error('Reverse Geocoding Error:', error);
     return null;
   }
 }
@@ -381,7 +382,7 @@ export async function generateText(prompt: string): Promise<string> {
     const result = await aiResponse.json();
     return result.choices[0].message.content.trim();
   } catch (error) {
-    console.error('AI Text Generation Error:', error);
+    logger.error('AI Text Generation Error:', error);
     throw error;
   }
 }

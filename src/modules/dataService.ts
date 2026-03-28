@@ -1,6 +1,7 @@
 import { supabase, supabaseAdmin } from './supabase'
 import { extractSocialImage } from './imageExtractor'
 import { translateMemorialData, geocodeLocation, reverseGeocode } from './ai'
+import { logger } from './logger'
 import type { MemorialEntry } from './types'
 import type { Database } from './database.types'
 
@@ -218,7 +219,7 @@ export async function fetchMemorials(includeUnverified = false): Promise<Memoria
 
       if (error) {
         if (page === 0) return fetchStaticMemorials()
-        console.error('Error fetching page', page, error)
+        logger.error('Error fetching page', page, error)
         break
       }
 
@@ -235,7 +236,7 @@ export async function fetchMemorials(includeUnverified = false): Promise<Memoria
 
     return allData.map(mapRowToEntry)
   } catch (e) {
-    console.error('Exception in fetchMemorials:', e)
+    logger.error('Exception in fetchMemorials:', e)
     return fetchStaticMemorials()
   }
 }
@@ -247,10 +248,8 @@ export async function verifyMemorial(
 
   // Check for admin access (service role key) for verification operations
   if (!supabaseAdmin) {
-    // eslint-disable-next-line no-console
-    console.warn('⚠️  Warning: SUPABASE_SERVICE_ROLE_KEY not set. Verification may fail due to RLS policies.');
-    // eslint-disable-next-line no-console
-    console.warn('   Add VITE_SUPABASE_SERVICE_ROLE_KEY to your .env file to enable admin operations.');
+    logger.warn('⚠️  Warning: SUPABASE_SERVICE_ROLE_KEY not set. Verification may fail due to RLS policies.');
+    logger.warn('   Add VITE_SUPABASE_SERVICE_ROLE_KEY to your .env file to enable admin operations.');
   }
 
   try {
@@ -269,7 +268,7 @@ export async function verifyMemorial(
     )
 
     if (checkError) {
-      console.error('Duplicate check error during verification:', checkError)
+      logger.error('Duplicate check error during verification:', checkError)
     }
 
     if (existing) {
@@ -325,7 +324,7 @@ export async function submitReport(
     /* eslint-enable @typescript-eslint/no-explicit-any */
 
     if (error) {
-      console.error('Report submission error:', error)
+      logger.error('Report submission error:', error)
       if (error.code === '42P01') {
         return { success: false, error: 'Database error: reports table not found. Please contact admin.' }
       }
@@ -336,7 +335,7 @@ export async function submitReport(
     }
     return { success: true }
   } catch (e) {
-    console.error('Report submission exception:', e)
+    logger.error('Report submission exception:', e)
     return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
   }
 }
@@ -351,13 +350,13 @@ export async function fetchReports(): Promise<{ data: ReportRow[]; error?: strin
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching reports:', error)
+      logger.error('Error fetching reports:', error)
       return { data: [], error: error.message }
     }
 
     return { data: data || [] }
   } catch (e) {
-    console.error('Exception fetching reports:', e)
+    logger.error('Exception fetching reports:', e)
     return { data: [], error: e instanceof Error ? e.message : 'Unknown error' }
   }
 }
@@ -394,7 +393,7 @@ export async function updateReportStatus(
     /* eslint-enable @typescript-eslint/no-explicit-any */
 
     if (error) {
-      console.error('Update error:', error)
+      logger.error('Update error:', error)
       return { success: false, error: error.message }
     }
 
@@ -404,7 +403,7 @@ export async function updateReportStatus(
 
     return { success: true }
   } catch (e) {
-    console.error('Update exception:', e)
+    logger.error('Update exception:', e)
     return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
   }
 }
@@ -437,7 +436,7 @@ export async function submitMemorial(
       )
 
       if (checkError) {
-        console.error('Duplicate check error:', checkError)
+        logger.error('Duplicate check error:', checkError)
       } else if (existing) {
         // MERGE LOGIC: Add new references to existing record
         const newRefs = entry.references || []
@@ -805,7 +804,7 @@ export async function batchSyncLocationCoords(): Promise<BatchResult> {
         /* eslint-enable @typescript-eslint/no-explicit-any */
 
         if (bulkError) {
-          console.error('Bulk update error:', bulkError)
+          logger.error('Bulk update error:', bulkError)
         }
       }
     }
@@ -837,16 +836,14 @@ async function fetchStaticMemorials(): Promise<MemorialEntry[]> {
         const content = await fs.readFile(fullPath, 'utf-8')
         return JSON.parse(content)
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('Failed to read static memorials from disk, falling back to fetch', err)
+        logger.warn('Failed to read static memorials from disk, falling back to fetch', err)
       }
     }
 
     const response = await fetch(url)
     return response.json()
   } catch (e) {
-    // eslint-disable-next-line no-console
-    console.error('Error fetching static memorials:', e)
+    logger.error('Error fetching static memorials:', e)
     return []
   }
 }

@@ -10,6 +10,7 @@ import { initInstagram } from './modules/instagram'
 import { supabase } from './modules/supabase'
 import { downloadMemorialPdf } from './modules/pdf'
 import { escapeHTML } from './modules/domUtils'
+import { logger } from './modules/logger'
 
 let currentMemorials: MemorialEntry[] = []
 
@@ -588,7 +589,7 @@ function renderDetails(entry: MemorialEntry) {
        if (instgrm && instgrm.Embeds) {
           instgrm.Embeds.process();
        } else {
-          console.error('Instagram widgets library NOT ready or not found');
+          logger.error('Instagram widgets library NOT ready or not found');
        }
     } else {
       const twttr = window.twttr
@@ -597,7 +598,7 @@ function renderDetails(entry: MemorialEntry) {
           t.widgets.load(panel)
         })
       } else {
-        console.error('Twitter widgets library NOT ready or not found');
+        logger.error('Twitter widgets library NOT ready or not found');
       }
     }
   }
@@ -643,7 +644,7 @@ function renderDetails(entry: MemorialEntry) {
         }, 2000)
       }
     } catch (err) {
-      console.error('Error sharing:', err)
+      logger.error('Error sharing:', err)
     }
   })
 
@@ -1204,7 +1205,7 @@ function initContributionForm() {
                 copyBtn.classList.remove('success')
               }, 2000)
             } catch (err) {
-              console.error('Failed to copy:', err)
+              logger.error('Failed to copy:', err)
             }
           })
         }
@@ -1214,5 +1215,5 @@ function initContributionForm() {
 }
 
 boot().catch((e) => {
-  console.error('Failed to boot app', e)
+  logger.error('Failed to boot app', e)
 })

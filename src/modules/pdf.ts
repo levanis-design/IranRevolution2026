@@ -2,6 +2,7 @@ import QRCode from 'qrcode';
 import html2pdf from 'html2pdf.js';
 import type { MemorialEntry } from './types';
 import { t, currentLanguage } from './i18n';
+import { logger } from './logger';
 
 export async function downloadMemorialPdf(entry: MemorialEntry) {
   const isFa = currentLanguage() === 'fa';
@@ -102,7 +103,7 @@ export async function downloadMemorialPdf(entry: MemorialEntry) {
   try {
     await html2pdf().set(opt).from(element).save();
   } catch (error) {
-    console.error('PDF generation failed:', error);
+    logger.error('PDF generation failed:', error);
     alert('Failed to generate PDF. Please try again.');
   }
 }

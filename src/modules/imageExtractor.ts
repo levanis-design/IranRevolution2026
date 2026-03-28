@@ -2,6 +2,7 @@ const OPENROUTER_API_KEY = (typeof import.meta !== 'undefined' && import.meta.en
 const OPENROUTER_MODEL = (typeof import.meta !== 'undefined' && import.meta.env) ? (import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free') : (process.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free');
 
 import { uploadImageToSupabase } from './supabase';
+import { logger } from './logger';
 
 /**
  * Fetches an image from Telegram using the Bot API if possible, or falls back to scraping.
@@ -45,7 +46,7 @@ async function fetchAndUploadTelegramImage(url: string): Promise<string | null> 
     // Step 3: Upload to Supabase
     return await uploadImageToSupabase(buffer, imageUrl);
   } catch (error) {
-    console.error('Error in fetchAndUploadTelegramImage:', error);
+    logger.error('Error in fetchAndUploadTelegramImage:', error);
     return null;
   }
 }
@@ -188,7 +189,7 @@ export async function extractTelegramImage(url: string): Promise<string | null> 
     });
 
     if (!response.ok) {
-      console.error(`Jina Reader API error: ${response.status} ${response.statusText}`);
+      logger.error(`Jina Reader API error: ${response.status} ${response.statusText}`);
       return null;
     }
 
@@ -235,7 +236,7 @@ export async function extractTelegramImage(url: string): Promise<string | null> 
     return null;
 
   } catch (error) {
-    console.error('Error extracting Telegram image:', error);
+    logger.error('Error extracting Telegram image:', error);
     return null;
   }
 }

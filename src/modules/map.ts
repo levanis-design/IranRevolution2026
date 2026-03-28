@@ -5,6 +5,7 @@ import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import type { MemorialEntry } from './types'
 import { currentLanguage } from './i18n'
+import { logger } from './logger'
 
 interface MemorialMarker extends L.Marker {
   entry: MemorialEntry
@@ -17,7 +18,7 @@ let selectedCb: (entry: MemorialEntry) => void = () => {}
 export function initMap() {
   const container = document.getElementById('map-container')
   if (!container) {
-    console.error('Map container element not found!')
+    logger.error('Map container element not found!')
     return
   }
 
@@ -40,7 +41,7 @@ export function initMap() {
     })
     
     tileLayer.on('tileerror', (e) => {
-      console.error('Map tile loading error:', e)
+      logger.error('Map tile loading error:', e)
     })
     
     tileLayer.addTo(map)
@@ -81,7 +82,7 @@ export function initMap() {
     resizeObserver.observe(container)
 
   } catch (err) {
-    console.error('Error initializing Leaflet map:', err)
+    logger.error('Error initializing Leaflet map:', err)
   }
 }
 
