@@ -205,7 +205,6 @@ export async function extractTelegramImage(url: string): Promise<string | null> 
 
     // Frequency analysis to filter out profile pictures (which usually appear multiple times in header/footer)
     const urlCounts = new Map<string, number>();
-    const uniqueUrls: string[] = [];
 
     for (const match of matches) {
       // Clean URL (remove backslashes often added by Jina/Markdown escaping)
@@ -213,9 +212,6 @@ export async function extractTelegramImage(url: string): Promise<string | null> 
       // Normalize URL (sometimes parameters differ?) - usually exact match is enough
       
       urlCounts.set(rawUrl, (urlCounts.get(rawUrl) || 0) + 1);
-      if (!uniqueUrls.includes(rawUrl)) {
-        uniqueUrls.push(rawUrl);
-      }
     }
 
     // Filter logic:
@@ -223,7 +219,7 @@ export async function extractTelegramImage(url: string): Promise<string | null> 
     // 2. Profile pics usually appear 2+ times (header + footer).
     // 3. Skip images that look like UI icons (logo, icon, avatar - though avatar might be in name).
 
-    const contentImages = uniqueUrls.filter(u => {
+    const contentImages = Array.from(urlCounts.keys()).filter(u => {
       const count = urlCounts.get(u) || 0;
       const isIcon = u.includes('logo') || u.includes('icon') || u.includes('assets');
       return count === 1 && !isIcon;
