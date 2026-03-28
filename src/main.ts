@@ -187,7 +187,7 @@ function initListView() {
         return `
           <div class="list-item-card ${isSensitive ? 'list-item-sensitive' : ''}" data-id="${escapeHTML(entry.id)}">
             <div class="list-item-photo-wrapper">
-              <img src="${escapeHTML(photo)}" alt="${escapeHTML(displayName)}" class="list-item-photo ${isSensitive ? 'gated-media' : ''}" loading="lazy">
+              <img src="${escapeHTML(photo)}" alt="${escapeHTML(displayName)}" class="list-item-photo ${isSensitive ? 'gated-media' : ''}">
               ${isSensitive ? `
                 <div class="sensitive-mini-overlay">
                   <span>⚠️</span>
