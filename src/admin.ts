@@ -208,13 +208,16 @@ async function loadData() {
   submissionsList.innerHTML = loadingHtml
   verifiedList.innerHTML = loadingHtml
   recentList.innerHTML = loadingHtml
-  
-  allMemorials = await fetchMemorials(true)
+
+  const [memorials, { error }] = await Promise.all([
+    fetchMemorials(true),
+    refreshReportsData()
+  ])
+  allMemorials = memorials
   allMemorials.forEach(m => {
     m._searchName = m.name.toLowerCase()
     m._searchCity = m.city.toLowerCase()
   })
-  const { error } = await refreshReportsData()
   await updateStats()
   renderSubmissions()
   renderVerified()
