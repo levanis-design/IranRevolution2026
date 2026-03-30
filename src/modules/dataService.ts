@@ -199,39 +199,42 @@ export async function fetchMemorials(includeUnverified = false): Promise<Memoria
   if (!supabase) return fetchStaticMemorials()
 
   try {
+    let allData: MemorialRow[] = []
+    let page = 0
     const pageSize = 1000
+    let hasMore = true
 
-    // Get total count first so we can fetch all pages in parallel
-    let countQuery = supabase
-      .from('memorials')
-      .select('*', { count: 'exact', head: true })
-    if (!includeUnverified) countQuery = countQuery.eq('verified', true)
-    const { count, error: countError } = await countQuery
+    while (hasMore) {
+      let query = supabase
+        .from('memorials')
+        .select('*')
+        .range(page * pageSize, (page + 1) * pageSize - 1)
+        .order('date', { ascending: false })
 
-    if (countError || count === null) return fetchStaticMemorials()
+      if (!includeUnverified) {
+        query = query.eq('verified', true)
+      }
 
-    const pageCount = Math.ceil(count / pageSize)
+      const { data, error } = await query
 
-    // Fetch all pages in parallel
-    const pages = await Promise.all(
-      Array.from({ length: pageCount }, (_, i) => {
-        let q = supabase!
-          .from('memorials')
-          .select('*')
-          .range(i * pageSize, (i + 1) * pageSize - 1)
-          .order('date', { ascending: false })
-        if (!includeUnverified) q = q.eq('verified', true)
-        return q
-      })
-    )
+      if (error) {
+        if (page === 0) return fetchStaticMemorials()
+        logger.error('Error fetching page', page, error)
+        break
+      }
 
-    const anyError = pages.find(p => p.error)
-    if (anyError?.error) {
-      logger.error('Error fetching memorials page:', anyError.error)
-      return fetchStaticMemorials()
+      if (!data || data.length === 0) {
+        hasMore = false
+      } else {
+        allData = [...allData, ...data]
+        if (data.length < pageSize) {
+          hasMore = false
+        }
+        page++
+      }
     }
 
-    return pages.flatMap(p => p.data ?? []).map(mapRowToEntry)
+    return allData.map(mapRowToEntry)
   } catch (e) {
     logger.error('Exception in fetchMemorials:', e)
     return fetchStaticMemorials()
