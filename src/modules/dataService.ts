@@ -300,14 +300,18 @@ export async function verifyMemorial(
 }
 
 export async function deleteMemorial(id: string): Promise<{ success: boolean; error?: string }> {
-  try {
-    if (!supabaseAdmin) throw new Error('Admin privileges required')
+  // Use service role key if available (local dev), otherwise fall back to
+  // authenticated session (multi-device admins — requires RLS policy for authenticated role)
+  const client = supabaseAdmin || supabase
+  if (!client) return { success: false, error: 'Supabase not configured' }
 
-    const { error } = await supabaseAdmin
-      .schema('public')
+  try {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const { error } = await (client as any)
       .from('memorials')
       .delete()
       .eq('id', id)
+    /* eslint-enable @typescript-eslint/no-explicit-any */
 
     if (error) return { success: false, error: error.message }
     return { success: true }
