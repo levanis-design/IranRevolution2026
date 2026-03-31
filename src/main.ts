@@ -4,13 +4,14 @@ import { initMap, plotMarkers, onMarkerSelected, onShowListView, focusOnMarker }
 import type { MemorialEntry } from './modules/types'
 import { setupSearch } from './modules/search'
 import { extractMemorialData } from './modules/ai'
-import { fetchMemorials, submitMemorial, submitReport, findDuplicateMemorialClient } from './modules/dataService'
+import { fetchMemorials, submitMemorial, submitReport, findDuplicateMemorialClient, getMemorialById, mapRowToEntry } from './modules/dataService'
 import { initTwitter } from './modules/twitter'
 import { initInstagram } from './modules/instagram'
 import { supabase } from './modules/supabase'
 import { downloadMemorialPdf } from './modules/pdf'
 import { escapeHTML } from './modules/domUtils'
 import { logger } from './modules/logger'
+import { renderPhotoFigure } from './modules/detailsMedia'
 
 let currentMemorials: MemorialEntry[] = []
 
@@ -48,6 +49,18 @@ async function boot() {
     const url = new URL(window.location.href)
     url.searchParams.set('id', entry.id || '')
     window.history.pushState({}, '', url.toString())
+
+    // Lazy-load full details (bio, references, testimonials) if not fetched yet
+    if (entry.id && entry.bio === undefined && (!entry.references || entry.references.length === 0)) {
+      getMemorialById(entry.id).then(row => {
+        if (!row) return
+        const full = mapRowToEntry(row)
+        // Update the cached entry so subsequent clicks don't re-fetch
+        const idx = currentMemorials.findIndex(m => m.id === entry.id)
+        if (idx !== -1) currentMemorials[idx] = full
+        renderDetails(full)
+      })
+    }
   })
 
   setupRealtime()
@@ -399,35 +412,13 @@ function renderDetails(entry: MemorialEntry) {
         </p>
       </header>
 
-      ${(() => {
-        const allPhotos: string[] = []
-        if (entry.media?.photos?.length) {
-          for (const p of entry.media.photos) if (!allPhotos.includes(p)) allPhotos.push(p)
-        } else if (entry.media?.photo) {
-          allPhotos.push(entry.media.photo)
-        }
-        if (!allPhotos.length) return ''
-        const multi = allPhotos.length > 1
-        return wrapSensitive(`
-          <figure class="profile-photo${multi ? ' photo-slider' : ''}" data-slide="0">
-            <div class="photo-track">
-              ${allPhotos.map((src, i) => `
-                <div class="photo-slide${i === 0 ? ' active' : ''}">
-                  <img src="${escapeHTML(src)}" alt="${escapeHTML(t('details.photoAlt', { name: displayName }))} ${i + 1}" loading="${i === 0 ? 'eager' : 'lazy'}" />
-                </div>
-              `).join('')}
-            </div>
-            ${multi ? `
-              <button class="slider-btn slider-prev" aria-label="Previous photo">&#8249;</button>
-              <button class="slider-btn slider-next" aria-label="Next photo">&#8250;</button>
-              <div class="slider-dots">
-                ${allPhotos.map((_, i) => `<span class="slider-dot${i === 0 ? ' active' : ''}" data-index="${i}"></span>`).join('')}
-              </div>
-            ` : ''}
-            <figcaption class="photo-attribution">${escapeHTML(t('details.photoAttribution'))}${multi ? ` · <span class="slide-counter">1 / ${allPhotos.length}</span>` : ''}</figcaption>
-          </figure>
-        `, !!entry.sensitiveMedia, 'sensitivity.mediaWarning')
-      })()}
+      ${renderPhotoFigure({
+        photos: entry.media?.photos,
+        photo: entry.media?.photo,
+        displayName,
+        sensitiveMedia: entry.sensitiveMedia,
+        t
+      })}
 
       <div class="profile-bio">
         ${displayBio ? (entry.sensitive ? `

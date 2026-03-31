@@ -204,10 +204,15 @@ export async function fetchMemorials(includeUnverified = false): Promise<Memoria
     const pageSize = 1000
     let hasMore = true
 
+    // Public map only needs display fields — skip bio/testimonials/source_links to reduce payload
+    const columns = includeUnverified
+      ? '*'
+      : 'id,name,name_fa,city,city_fa,location,location_fa,date,coords,media,verified'
+
     while (hasMore) {
       let query = supabase
         .from('memorials')
-        .select('*')
+        .select(columns)
         .range(page * pageSize, (page + 1) * pageSize - 1)
         .order('date', { ascending: false })
 
@@ -215,7 +220,7 @@ export async function fetchMemorials(includeUnverified = false): Promise<Memoria
         query = query.eq('verified', true)
       }
 
-      const { data, error } = await query
+      const { data, error } = await query as { data: MemorialRow[] | null; error: { message: string; code?: string } | null }
 
       if (error) {
         if (page === 0) return fetchStaticMemorials()
