@@ -44,7 +44,7 @@ export function renderPhotoFigure(options: {
       <div class="photo-track">
         ${allPhotos.map((src, i) => `
           <div class="photo-slide${i === 0 ? ' active' : ''}">
-            <img src="${escapeHTML(src)}" alt="${escapeHTML(options.t('details.photoAlt', { name: options.displayName }))} ${i + 1}" />
+            <img src="${escapeHTML(src)}" alt="${escapeHTML(options.t('details.photoAlt', { name: options.displayName }))} ${i + 1}" loading="${i === 0 ? 'eager' : 'lazy'}" />
           </div>
         `).join('')}
       </div>
