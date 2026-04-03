@@ -219,3 +219,221 @@ describe('extractMemorialData', () => {
     });
   });
 });
+
+describe('geocodeLocation', () => {
+  let mockFetch: ReturnType<typeof vi.fn>;
+  let geocodeLocation: (city: string, location: string) => Promise<{ lat: number; lon: number } | null>;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_OPENROUTER_API_KEY', 'valid-test-key');
+    mockFetch = vi.fn();
+    global.fetch = mockFetch;
+
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const aiModule = await import('../ai');
+    geocodeLocation = aiModule.geocodeLocation;
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    global.fetch = globalFetch;
+    vi.clearAllMocks();
+  });
+
+  it('successfully geocodes when both city and location query yield results', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [{ lat: '35.6892', lon: '51.3890' }]
+    });
+
+    const result = await geocodeLocation('Tehran', 'Azadi Square');
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('Azadi%20Square%2C%20Tehran%2C%20Iran'),
+      expect.any(Object)
+    );
+    expect(result).toEqual({ lat: 35.6892, lon: 51.3890 });
+  });
+
+  it('falls back to city only query when location query yields no results', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [] // First call (location + city) returns empty
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{ lat: '35.6', lon: '51.3' }] // Second call (city only) returns data
+      });
+
+    const result = await geocodeLocation('Tehran', 'Unknown Small Street');
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({ lat: 35.6, lon: 51.3 });
+  });
+
+  it('returns null when neither query yields results', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => []
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => []
+      });
+
+    const result = await geocodeLocation('Unknown City', 'Unknown Street');
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(result).toBeNull();
+  });
+
+  it('returns null and logs error if initial geocoding request fails (not ok)', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      statusText: 'Internal Server Error'
+    });
+
+    const result = await geocodeLocation('Tehran', 'Azadi Square');
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(console.error).toHaveBeenCalledWith('Geocoding Error:', expect.any(Error));
+    expect(result).toBeNull();
+  });
+
+  it('returns null and logs error if fetch throws an exception', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+    const result = await geocodeLocation('Tehran', 'Azadi Square');
+
+    expect(console.error).toHaveBeenCalledWith('Geocoding Error:', expect.any(Error));
+    expect(result).toBeNull();
+  });
+});
+
+describe('translateMemorialData', () => {
+  let mockFetch: ReturnType<typeof vi.fn>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let translateMemorialData: (data: any) => Promise<any | null>;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_OPENROUTER_API_KEY', 'valid-test-key');
+    mockFetch = vi.fn();
+    global.fetch = mockFetch;
+
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const aiModule = await import('../ai');
+    translateMemorialData = aiModule.translateMemorialData;
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    global.fetch = globalFetch;
+    vi.clearAllMocks();
+  });
+
+  describe('API Key Validation', () => {
+    it('returns null and logs error if API key is not set', async () => {
+      vi.stubEnv('VITE_OPENROUTER_API_KEY', '');
+      vi.resetModules();
+      const newModule = await import('../ai');
+
+      const result = await newModule.translateMemorialData({ name: 'Test' });
+      expect(result).toBeNull();
+    });
+
+    it('returns null and logs error if API key is default placeholder', async () => {
+      vi.stubEnv('VITE_OPENROUTER_API_KEY', 'sk-or-v1-...');
+      vi.resetModules();
+      const newModule = await import('../ai');
+
+      const result = await newModule.translateMemorialData({ name: 'Test' });
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('Translation Processing', () => {
+    it('successfully translates data returning clean json', async () => {
+      const mockAiResponse = {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({ name: 'Test', name_fa: 'تست' })
+            }
+          }
+        ]
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockAiResponse
+      });
+
+      const result = await translateMemorialData({ name: 'Test' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith('https://openrouter.ai/api/v1/chat/completions', expect.any(Object));
+      expect(result).toEqual({ name: 'Test', name_fa: 'تست' });
+    });
+
+    it('strips markdown wrapping and returns correct json', async () => {
+      const mockAiResponse = {
+        choices: [
+          {
+            message: {
+              content: "```json\n{\n  \"name\": \"Test\",\n  \"name_fa\": \"تست\"\n}\n```"
+            }
+          }
+        ]
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockAiResponse
+      });
+
+      const result = await translateMemorialData({ name: 'Test' });
+
+      expect(result).toEqual({ name: 'Test', name_fa: 'تست' });
+    });
+
+    it('returns null and logs error if AI response is invalid json', async () => {
+      const mockAiResponse = {
+        choices: [
+          {
+            message: {
+              content: "This is not valid json."
+            }
+          }
+        ]
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockAiResponse
+      });
+
+      const result = await translateMemorialData({ name: 'Test' });
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null and logs error if API fails (not ok)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error'
+      });
+
+      const result = await translateMemorialData({ name: 'Test' });
+
+      expect(result).toBeNull();
+    });
+  });
+});

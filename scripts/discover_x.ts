@@ -98,26 +98,31 @@ async function processUrl(
       return;
     }
 
-    // Process each victim
-    for (const data of victims) {
-      if (!isValidVictim(data)) {
-        console.log(`Skipping victim (invalid name) in: ${url}`);
-        stats.skipCount++;
-        continue;
-      }
+    // Process each victim concurrently in batches
+    const CONCURRENCY_LIMIT = 5;
+    for (let i = 0; i < victims.length; i += CONCURRENCY_LIMIT) {
+      const batch = victims.slice(i, i + CONCURRENCY_LIMIT);
 
-      // Create memorial entry (ensures photo internally)
-      const entry = await createMemorialEntry(data, url);
+      await Promise.all(batch.map(async (data) => {
+        if (!isValidVictim(data)) {
+          console.log(`Skipping victim (invalid name) in: ${url}`);
+          stats.skipCount++;
+          return;
+        }
 
-      // Submit to database
-      const result = await submitMemorial(entry);
+        // Create memorial entry (ensures photo internally)
+        const entry = await createMemorialEntry(data, url);
 
-      if (result.success) {
-        console.log(`Successfully added/merged: ${data.name}`);
-        stats.successCount++;
-      } else {
-        console.error(`Failed to submit ${data.name}: ${result.error}`);
-      }
+        // Submit to database
+        const result = await submitMemorial(entry);
+
+        if (result.success) {
+          console.log(`Successfully added/merged: ${data.name}`);
+          stats.successCount++;
+        } else {
+          console.error(`Failed to submit ${data.name}: ${result.error}`);
+        }
+      }));
     }
   } catch (error) {
     console.error(`Error processing ${url}:`, error);

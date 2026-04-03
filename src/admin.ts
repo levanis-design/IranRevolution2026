@@ -347,6 +347,12 @@ async function updateStats() {
   statReports.textContent = activeReports.length.toString()
 }
 
+function matchesSearchQuery(m: MemorialEntry, query: string): boolean {
+  return (m._searchName || m.name.toLowerCase()).includes(query) ||
+         (!!m.name_fa && m.name_fa.includes(query)) ||
+         (m._searchCity || m.city.toLowerCase()).includes(query)
+}
+
 function sortMemorialsList(memorials: MemorialEntry[], sortBy: string) {
   return [...memorials].sort((a, b) => {
     switch (sortBy) {
@@ -373,14 +379,10 @@ function renderSubmissions() {
   const sortBy = sortSubmissions.value
   let filtered = allMemorials
     .filter(m => !m.verified)
-    .filter(m => 
-      (m._searchName || m.name.toLowerCase()).includes(query) ||
-      (m.name_fa && m.name_fa.includes(query)) ||
-      (m._searchCity || m.city.toLowerCase()).includes(query)
-    )
-  
+    .filter(m => matchesSearchQuery(m, query))
+
   filtered = sortMemorialsList(filtered, sortBy)
-    
+
   renderTable(filtered, submissionsList)
 }
 
@@ -389,14 +391,10 @@ function renderVerified() {
   const sortBy = sortMemorials.value
   let filtered = allMemorials
     .filter(m => m.verified)
-    .filter(m => 
-      (m._searchName || m.name.toLowerCase()).includes(query) ||
-      (m.name_fa && m.name_fa.includes(query)) ||
-      (m._searchCity || m.city.toLowerCase()).includes(query)
-    )
-  
+    .filter(m => matchesSearchQuery(m, query))
+
   filtered = sortMemorialsList(filtered, sortBy)
-    
+
   renderTable(filtered, verifiedList)
 }
 
@@ -497,11 +495,7 @@ function updateMergeResults() {
   const query = mergeTargetSearch.value.toLowerCase().trim()
   const results = allMemorials
     .filter(m => m.id !== currentSourceId)
-    .filter(m => 
-      (m._searchName || m.name.toLowerCase()).includes(query) ||
-      (m.name_fa && m.name_fa.includes(query)) ||
-      (m._searchCity || m.city.toLowerCase()).includes(query)
-    )
+    .filter(m => matchesSearchQuery(m, query))
     .slice(0, 10)
 
   if (results.length === 0) {

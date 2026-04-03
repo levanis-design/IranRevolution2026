@@ -155,6 +155,37 @@ describe('downloadMemorialPdf', () => {
     expect(element.innerHTML).toContain('Fallback bio.');
   });
 
+  it('escapes HTML to prevent XSS', async () => {
+    const xssEntry: MemorialEntry = {
+      id: '999',
+      name: '<script>alert("name")</script>',
+      city: '<script>alert("city")</script>',
+      location: 'Safe Location',
+      date: '2022-09-16T00:00:00.000Z',
+      bio: '<script>alert("bio")</script>',
+      media: {
+        photo: '"><script>alert("photo")</script>'
+      }
+    };
+
+    await downloadMemorialPdf(xssEntry);
+
+    const html2pdfInstance = html2pdf();
+    const setObj = vi.mocked(html2pdfInstance.set).mock.results[0].value;
+    const element = vi.mocked(setObj.from).mock.calls[0][0] as HTMLElement;
+
+    // Verify raw XSS payloads are NOT in the innerHTML
+    expect(element.innerHTML).not.toContain('<script>alert("name")</script>');
+    expect(element.innerHTML).not.toContain('<script>alert("city")</script>');
+    expect(element.innerHTML).not.toContain('<script>alert("bio")</script>');
+    expect(element.innerHTML).not.toContain('"><script>alert("photo")</script>');
+
+    // Verify escaped strings ARE in the innerHTML
+    expect(element.innerHTML).toContain('&lt;script&gt;alert("name")&lt;/script&gt;');
+    expect(element.innerHTML).toContain('&lt;script&gt;alert("city")&lt;/script&gt;');
+    expect(element.innerHTML).toContain('&lt;script&gt;alert("bio")&lt;/script&gt;');
+  });
+
   it('handles html2pdf errors gracefully', async () => {
     const error = new Error('PDF Error');
 

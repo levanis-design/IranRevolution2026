@@ -1,5 +1,86 @@
-import { describe, it, expect } from 'vitest'
-import { mapRowToEntry } from '../dataService'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mapRowToEntry, deleteMemorial, deleteReport } from '../dataService'
+
+const { mockSupabase, mockSupabaseAdmin } = vi.hoisted(() => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  mockSupabase: { current: { from: vi.fn() } as any },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  mockSupabaseAdmin: { current: null as any }
+}))
+
+vi.mock('../supabase', () => ({
+  get supabase() { return mockSupabase.current },
+  get supabaseAdmin() { return mockSupabaseAdmin.current }
+}))
+
+describe('deleteMemorial', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSupabase.current = { from: vi.fn() }
+    mockSupabaseAdmin.current = null
+  })
+
+  it('successfully deletes a memorial', async () => {
+    const mockEq = vi.fn().mockResolvedValue({ error: null })
+    const mockDelete = vi.fn().mockReturnValue({ eq: mockEq })
+    mockSupabase.current.from.mockReturnValue({ delete: mockDelete })
+
+    const result = await deleteMemorial('test-id')
+
+    expect(mockSupabase.current.from).toHaveBeenCalledWith('memorials')
+    expect(mockDelete).toHaveBeenCalled()
+    expect(mockEq).toHaveBeenCalledWith('id', 'test-id')
+    expect(result).toEqual({ success: true })
+  })
+
+  it('returns false and error if database deletion fails', async () => {
+    const mockEq = vi.fn().mockResolvedValue({ error: { message: 'Database error' } })
+    const mockDelete = vi.fn().mockReturnValue({ eq: mockEq })
+    mockSupabase.current.from.mockReturnValue({ delete: mockDelete })
+
+    const result = await deleteMemorial('test-id')
+
+    expect(result).toEqual({ success: false, error: 'Database error' })
+  })
+
+  it('returns false and error if Supabase client is not configured', async () => {
+    mockSupabase.current = null
+    const result = await deleteMemorial('test-id')
+
+    expect(result).toEqual({ success: false, error: 'Supabase not configured' })
+  })
+
+  it('returns false and error if an exception is thrown', async () => {
+    mockSupabase.current.from.mockImplementation(() => {
+      throw new Error('Unexpected exception')
+    })
+
+    const result = await deleteMemorial('test-id')
+
+    expect(result).toEqual({ success: false, error: 'Unexpected exception' })
+  })
+
+  it('uses admin client if available', async () => {
+    const mockEq = vi.fn().mockResolvedValue({ error: null })
+    const mockDelete = vi.fn().mockReturnValue({ eq: mockEq })
+
+    // Set up admin client
+    mockSupabaseAdmin.current = {
+      from: vi.fn().mockReturnValue({ delete: mockDelete })
+    }
+
+    // Even if standard client is also set, admin should be preferred
+    mockSupabase.current = {
+      from: vi.fn().mockReturnValue({ delete: vi.fn().mockReturnValue({ eq: vi.fn() }) })
+    }
+
+    const result = await deleteMemorial('test-id')
+
+    expect(mockSupabaseAdmin.current.from).toHaveBeenCalledWith('memorials')
+    expect(mockSupabase.current.from).not.toHaveBeenCalled()
+    expect(result).toEqual({ success: true })
+  })
+})
 
 describe('mapRowToEntry', () => {
   const mockRow = {
@@ -111,5 +192,53 @@ describe('mapRowToEntry', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const entry = mapRowToEntry(rowWithInvalidTestimonials as any)
     expect(entry.testimonials).toBeUndefined()
+  })
+})
+
+describe('deleteReport', () => {
+  const mockId = 'test-report-id'
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let mockEq: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let mockDelete: any
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockEq = vi.fn()
+    mockDelete = vi.fn().mockReturnValue({ eq: mockEq })
+    mockSupabase.current = { from: vi.fn().mockReturnValue({ delete: mockDelete }) }
+    mockSupabaseAdmin.current = null
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('should return success when delete is successful', async () => {
+    mockEq.mockResolvedValue({ error: null })
+
+    const result = await deleteReport(mockId)
+
+    expect(mockSupabase.current.from).toHaveBeenCalledWith('reports')
+    expect(mockDelete).toHaveBeenCalled()
+    expect(mockEq).toHaveBeenCalledWith('id', mockId)
+    expect(result).toEqual({ success: true })
+  })
+
+  it('should return error when supabase delete fails', async () => {
+    const errorMessage = 'Database deletion failed'
+    mockEq.mockResolvedValue({ error: { message: errorMessage } })
+
+    const result = await deleteReport(mockId)
+
+    expect(result).toEqual({ success: false, error: errorMessage })
+  })
+
+  it('should catch exceptions and return unknown error', async () => {
+    mockEq.mockRejectedValue(new Error('Network error'))
+
+    const result = await deleteReport(mockId)
+
+    expect(result).toEqual({ success: false, error: 'Network error' })
   })
 })

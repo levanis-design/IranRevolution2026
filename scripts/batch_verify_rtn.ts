@@ -34,37 +34,43 @@ async function batchVerifyRTN(): Promise<void> {
   let merged = 0;
   let errors = 0;
 
-  for (const memorial of rtnSubmissions) {
-    try {
-      if (!memorial.id) {
-        console.error(`  ❌ Skipping entry without ID: ${memorial.name}`);
-        errors++;
-        continue;
-      }
+  const CHUNK_SIZE = 5;
 
-      console.log(`Verifying: ${memorial.name} (${memorial.id})`);
+  for (let i = 0; i < rtnSubmissions.length; i += CHUNK_SIZE) {
+    const chunk = rtnSubmissions.slice(i, i + CHUNK_SIZE);
 
-      const result = await verifyMemorial(memorial.id);
+    await Promise.all(
+      chunk.map(async memorial => {
+        try {
+          if (!memorial.id) {
+            console.error(`  ❌ Skipping entry without ID: ${memorial.name}`);
+            errors++;
+            return;
+          }
 
-      if (result.success) {
-        if (result.merged) {
-          console.log(`  ✅ Merged with existing entry`);
-          merged++;
-        } else {
-          console.log(`  ✅ Verified`);
-          approved++;
+          const result = await verifyMemorial(memorial.id);
+
+          if (result.success) {
+            if (result.merged) {
+              console.log(`  ✅ Merged with existing entry: ${memorial.name} (${memorial.id})`);
+              merged++;
+            } else {
+              console.log(`  ✅ Verified: ${memorial.name} (${memorial.id})`);
+              approved++;
+            }
+          } else {
+            console.log(`  ❌ Failed to verify ${memorial.name} (${memorial.id}): ${result.error}`);
+            errors++;
+          }
+        } catch (error) {
+          console.error(`  ❌ Error verifying ${memorial.name} (${memorial.id}): ${error}`);
+          errors++;
         }
-      } else {
-        console.log(`  ❌ Failed: ${result.error}`);
-        errors++;
-      }
+      })
+    );
 
-      // Small delay to avoid rate limits
-      await new Promise(resolve => setTimeout(resolve, 500));
-    } catch (error) {
-      console.error(`  ❌ Error: ${error}`);
-      errors++;
-    }
+    // Small delay to avoid rate limits
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
 
   console.log('\n═══════════════════════════════════════');

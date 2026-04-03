@@ -82,66 +82,69 @@ async function run() {
 
   let updated = 0, failed = 0
 
-  for (let i = 0; i < targets.length; i++) {
-    const m = targets[i]
-    const urls = getSocialUrls(m)
-    process.stdout.write(`[${i + 1}/${targets.length}] ${m.name} (${urls.length} sources) ... `)
+  // Chunk array processing
+  const chunkSize = 5
+  for (let i = 0; i < targets.length; i += chunkSize) {
+    const chunk = targets.slice(i, i + chunkSize)
 
-    const photos: string[] = []
-    const existingPhotos: string[] = (m.media?.photos as string[]) || (m.media?.photo ? [m.media.photo] : [])
+    await Promise.all(chunk.map(async (m) => {
+      const urls = getSocialUrls(m)
 
-    for (const sourceUrl of urls) {
-      try {
-        const photoUrl = await extractSocialImage(sourceUrl)
-        if (!photoUrl) continue
+      const photos: string[] = []
+      const existingPhotos: string[] = (m.media?.photos as string[]) || (m.media?.photo ? [m.media.photo] : [])
 
-        let stored = photoUrl
-        // Upload non-Supabase images to our storage
-        if (!photoUrl.includes(supabaseUrl)) {
-          const buf = await downloadImage(photoUrl)
-          if (!buf) continue
-          const up = await uploadImageToSupabase(buf, photoUrl)
-          if (!up) continue
-          stored = up
+      await Promise.all(urls.map(async (sourceUrl) => {
+        try {
+          const photoUrl = await extractSocialImage(sourceUrl)
+          if (!photoUrl) return
+
+          let stored = photoUrl
+          if (!photoUrl.includes(supabaseUrl)) {
+            const buf = await downloadImage(photoUrl)
+            if (!buf) return
+            const up = await uploadImageToSupabase(buf, photoUrl)
+            if (!up) return
+            stored = up
+          }
+
+          if (!photos.includes(stored) && !existingPhotos.includes(stored)) {
+            photos.push(stored)
+          }
+        } catch {
+          // skip this source
         }
+      }))
 
-        if (!photos.includes(stored) && !existingPhotos.includes(stored)) {
-          photos.push(stored)
-        }
-      } catch {
-        // skip this source
+      if (photos.length === 0) {
+        console.log(`[${m.name}] ⏭️  no new images found (${urls.length} sources)`)
+        return
       }
-      await new Promise(r => setTimeout(r, 300))
-    }
 
-    if (photos.length === 0) {
-      console.log('⏭️  no new images found')
-      continue
-    }
+      const merged = [...existingPhotos, ...photos].filter((v, idx, a) => a.indexOf(v) === idx)
 
-    const merged = [...existingPhotos, ...photos].filter((v, i, a) => a.indexOf(v) === i)
+      if (dryRun) {
+        console.log(`[${m.name}] ✅ would add ${photos.length} photo(s) → total ${merged.length}`)
+        updated++
+        return
+      }
 
-    if (dryRun) {
-      console.log(`✅ would add ${photos.length} photo(s) → total ${merged.length}`)
-      updated++
-      continue
-    }
+      const updatedMedia = {
+        ...(m.media || {}),
+        photo: merged[0],      // keep primary as first
+        photos: merged
+      }
 
-    const updatedMedia = {
-      ...(m.media || {}),
-      photo: merged[0],      // keep primary as first
-      photos: merged
-    }
+      const { error } = await supabase.from('memorials').update({ media: updatedMedia }).eq('id', m.id)
+      if (error) {
+        console.log(`[${m.name}] ❌ update failed: ${error.message}`)
+        failed++
+      } else {
+        console.log(`[${m.name}] ✅ ${photos.length} new photo(s) → total ${merged.length}`)
+        updated++
+      }
+    }))
 
-    const { error } = await supabase.from('memorials').update({ media: updatedMedia }).eq('id', m.id)
-    if (error) {
-      console.log(`❌ update failed: ${error.message}`)
-      failed++
-    } else {
-      console.log(`✅ ${photos.length} new photo(s) → total ${merged.length}`)
-      updated++
-    }
-
+    // Add a small delay between chunks to avoid rate limiting
     await new Promise(r => setTimeout(r, 200))
   }
 

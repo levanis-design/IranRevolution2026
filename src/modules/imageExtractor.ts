@@ -3,6 +3,7 @@ const OPENROUTER_MODEL = (typeof import.meta !== 'undefined' && import.meta.env)
 
 import { uploadImageToSupabase } from './supabase';
 import { logger } from './logger';
+import { fetchJinaReader } from './jinaReader';
 
 /**
  * Fetches an image from Telegram using the Bot API if possible, or falls back to scraping.
@@ -60,18 +61,7 @@ export async function extractInstagramImage(url: string): Promise<string | null>
   }
 
   try {
-    // Optimization: Use /embed/captioned/ for Instagram to bypass login walls
-    const cleanUrl = url.split('?')[0].replace(/\/$/, '');
-    const targetUrl = `${cleanUrl}/embed/captioned/`;
-    const readerUrl = `https://r.jina.ai/${targetUrl}`;
-    
-    const response = await fetch(readerUrl, {
-      headers: {
-        'X-No-Cache': 'true',
-        'X-With-Images-Summary': 'true',
-        'Accept': 'text/plain'
-      }
-    });
+    const response = await fetchJinaReader(url);
 
     if (!response.ok) return null;
     const content = await response.text();
@@ -171,22 +161,7 @@ export async function extractTelegramImage(url: string): Promise<string | null> 
   if (supabaseUrl) return supabaseUrl;
 
   try {
-    // Use embed mode for cleaner content and better separation of profile vs post content
-    // Convert https://t.me/s/channel/123 -> https://t.me/channel/123?embed=1
-    let targetUrl = url.replace('/s/', '/');
-    if (!targetUrl.includes('embed=1')) {
-      targetUrl = targetUrl.includes('?') ? `${targetUrl}&embed=1` : `${targetUrl}?embed=1`;
-    }
-
-    const readerUrl = `https://r.jina.ai/${targetUrl}`;
-    
-    const response = await fetch(readerUrl, {
-      headers: {
-        'X-No-Cache': 'true',
-        'X-With-Images-Summary': 'true',
-        'Accept': 'text/plain'
-      }
-    });
+    const response = await fetchJinaReader(url);
 
     if (!response.ok) {
       logger.error(`Jina Reader API error: ${response.status} ${response.statusText}`);
@@ -251,14 +226,7 @@ export async function extractXPostImage(url: string): Promise<string | null> {
 
   try {
     // Step 1: Fetch URL content as Markdown using Jina Reader API
-    const readerUrl = `https://r.jina.ai/${url}`;
-    const response = await fetch(readerUrl, {
-      headers: {
-        'X-No-Cache': 'true',
-        'X-With-Images-Summary': 'true',
-        'Accept': 'text/plain'
-      }
-    });
+    const response = await fetchJinaReader(url);
 
     if (!response.ok) {
       return null;

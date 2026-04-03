@@ -1,5 +1,6 @@
 import type { MemorialEntry } from './types';
 import { logger } from './logger';
+import { fetchJinaReader } from './jinaReader';
 
 const OPENROUTER_API_KEY = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env.VITE_OPENROUTER_API_KEY : process.env.VITE_OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = (typeof import.meta !== 'undefined' && import.meta.env) ? (import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free') : (process.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free');
@@ -10,24 +11,7 @@ export interface ExtractedMemorialData extends Partial<MemorialEntry> {
 }
 
 async function fetchPageContent(url: string): Promise<string> {
-  // Optimization: Use /embed/captioned/ for Instagram to bypass login walls
-  let targetUrl = url;
-  if (url.includes('instagram.com')) {
-    const cleanUrl = url.split('?')[0].replace(/\/$/, '');
-    targetUrl = `${cleanUrl}/embed/captioned/`;
-  } else if (url.includes('t.me/') && !url.includes('?embed=')) {
-    targetUrl = url.includes('?') ? `${url}&embed=1` : `${url}?embed=1`;
-  }
-
-  const readerUrl = `https://r.jina.ai/${targetUrl}`;
-
-  const response = await fetch(readerUrl, {
-    headers: {
-      'X-No-Cache': 'true',
-      'X-With-Images-Summary': 'true',
-      'Accept': 'text/plain'
-    }
-  });
+  const response = await fetchJinaReader(url);
 
   if (!response.ok) {
     throw new Error(`Failed to read the source URL. Jina said: ${response.statusText}`);

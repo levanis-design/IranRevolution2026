@@ -2,7 +2,7 @@ import { escapeHTML } from './domUtils'
 
 type TranslateFn = (key: string, vars?: Record<string, string>) => string
 
-function wrapSensitive(content: string, isSensitive: boolean, warning: string, t: TranslateFn) {
+export function wrapSensitive(content: string, isSensitive: boolean, warning: string, t: TranslateFn) {
   if (!isSensitive) return content
 
   return `

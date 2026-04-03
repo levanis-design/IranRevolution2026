@@ -24,7 +24,7 @@ interface QueryResult<T> {
 /**
  * Helper to execute Supabase queries with proper typing
  */
-async function fetchMemorialById(id: string): Promise<QueryResult<MemorialRow>> {
+export async function fetchMemorialById(id: string): Promise<QueryResult<MemorialRow>> {
   const { data, error } = await supabase!
     .from('memorials')
     .select('*')
@@ -43,7 +43,7 @@ export async function getMemorialById(id: string): Promise<MemorialRow | null> {
   return data ?? null
 }
 
-async function findDuplicateMemorial(
+export async function findDuplicateMemorial(
   name: string,
   nameFa: string | undefined
 ): Promise<QueryResult<MemorialRow>> {
@@ -77,7 +77,7 @@ async function findVerifiedDuplicate(
   return { data, error }
 }
 
-async function updateMemorial(
+export async function updateMemorial(
   id: string,
   updates: MemorialUpdate
 ): Promise<{ error: { message: string } | null }> {
@@ -126,11 +126,11 @@ async function deleteMemRecord(id: string): Promise<{ error: { message: string }
 // Reference Merging Helpers
 // ============================================================================
 
-function getSourceLinks(memorial: MemorialRow): ReferenceLink[] {
+export function getSourceLinks(memorial: MemorialRow): ReferenceLink[] {
   return (memorial.source_links as ReferenceLink[]) || []
 }
 
-function mergeReferences(
+export function mergeReferences(
   existingLinks: ReferenceLink[],
   newLinks: ReferenceLink[]
 ): ReferenceLink[] {
@@ -550,47 +550,6 @@ export async function submitMemorial(
 }
 
 // ============================================================================
-// Enrichment (fill missing fields without overwriting existing data)
-// ============================================================================
-
-export async function enrichMemorial(
-  name: string,
-  nameFa: string | undefined,
-  fields: Partial<MemorialEntry>
-): Promise<{ success: boolean; found: boolean; updated: boolean; error?: string }> {
-  if (!supabase) return { success: false, found: false, updated: false, error: 'Supabase not configured' }
-
-  const { data: existing, error: findError } = await findDuplicateMemorial(name, nameFa)
-  if (findError) return { success: false, found: false, updated: false, error: findError.message }
-  if (!existing) return { success: true, found: false, updated: false }
-
-  // Fetch full record to check all fields
-  const { data: full, error: fetchError } = await fetchMemorialById(existing.id)
-  if (fetchError || !full) return { success: false, found: true, updated: false, error: 'Could not fetch full record' }
-
-  const updates: MemorialUpdate = {}
-
-  if (fields.name_fa && (!full.name_fa || full.name_fa === 'Unknown')) updates.name_fa = fields.name_fa
-  if (fields.city && (!full.city || full.city === 'Unknown')) updates.city = fields.city
-  if (fields.date && (!full.date || full.date === '2026-01-09')) updates.date = fields.date
-  if (fields.bio && (!full.bio || full.bio === '')) updates.bio = fields.bio
-
-  // Always merge new references
-  if (fields.references && fields.references.length > 0) {
-    const currentRefs = getSourceLinks(full)
-    const merged = mergeReferences(currentRefs, fields.references as ReferenceLink[])
-    if (merged.length > currentRefs.length) updates.source_links = merged
-  }
-
-  if (Object.keys(updates).length === 0) return { success: true, found: true, updated: false }
-
-  const { error: updateError } = await updateMemorial(existing.id, updates)
-  if (updateError) return { success: false, found: true, updated: false, error: updateError.message }
-
-  return { success: true, found: true, updated: true }
-}
-
-// ============================================================================
 // Batch Operations
 // ============================================================================
 
@@ -692,40 +651,43 @@ export async function batchTranslateMemorials(): Promise<BatchResult> {
     const updatesToSave: MemorialUpdate[] = []
     const allTranslationKeys = new Set<keyof MemorialUpdate>()
 
-    for (const m of targets) {
-      const translation = await translateMemorialData({
-        name: m.name,
-        city: m.city,
-        location: m.location || '',
-        bio: m.bio || '',
-        name_fa: m.name_fa || undefined,
-        city_fa: m.city_fa || undefined,
-        location_fa: m.location_fa || undefined,
-        bio_fa: m.bio_fa || undefined
-      })
+    const chunkSize = 5
+    for (let i = 0; i < targets.length; i += chunkSize) {
+      const chunk = targets.slice(i, i + chunkSize)
 
-      if (translation) {
-        const updateData: MemorialUpdate = {}
+      await Promise.all(chunk.map(async (m) => {
+        const translation = await translateMemorialData({
+          name: m.name,
+          city: m.city,
+          location: m.location || '',
+          bio: m.bio || '',
+          name_fa: m.name_fa || undefined,
+          city_fa: m.city_fa || undefined,
+          location_fa: m.location_fa || undefined,
+          bio_fa: m.bio_fa || undefined
+        })
 
-        if (!m.name && translation.name && m.name_fa) updateData.name = translation.name
-        if (!m.name_fa && translation.name_fa && m.name) updateData.name_fa = translation.name_fa
+        if (translation) {
+          const updateData: MemorialUpdate = {}
 
-        if (!m.city && translation.city && m.city_fa) updateData.city = translation.city
-        if (!m.city_fa && translation.city_fa && m.city) updateData.city_fa = translation.city_fa
+          if (!m.name && translation.name && m.name_fa) updateData.name = translation.name
+          if (!m.name_fa && translation.name_fa && m.name) updateData.name_fa = translation.name_fa
 
-        if (!m.location && translation.location && m.location_fa) updateData.location = translation.location
-        if (!m.location_fa && translation.location_fa && m.location) updateData.location_fa = translation.location_fa
+          if (!m.city && translation.city && m.city_fa) updateData.city = translation.city
+          if (!m.city_fa && translation.city_fa && m.city) updateData.city_fa = translation.city_fa
 
-        if (!m.bio && translation.bio && m.bio_fa) updateData.bio = translation.bio
-        if (!m.bio_fa && translation.bio_fa && m.bio) updateData.bio_fa = translation.bio_fa
+          if (!m.location && translation.location && m.location_fa) updateData.location = translation.location
+          if (!m.location_fa && translation.location_fa && m.location) updateData.location_fa = translation.location_fa
 
-        if (Object.keys(updateData).length > 0) {
-          Object.keys(updateData).forEach(k => allTranslationKeys.add(k as keyof MemorialUpdate))
-          updatesToSave.push({ id: m.id, ...updateData } as MemorialUpdate)
+          if (!m.bio && translation.bio && m.bio_fa) updateData.bio = translation.bio
+          if (!m.bio_fa && translation.bio_fa && m.bio) updateData.bio_fa = translation.bio_fa
+
+          if (Object.keys(updateData).length > 0) {
+            Object.keys(updateData).forEach(k => allTranslationKeys.add(k as keyof MemorialUpdate))
+            updatesToSave.push({ id: m.id, ...updateData } as MemorialUpdate)
+          }
         }
-      }
-
-      await new Promise(r => setTimeout(r, 500))
+      }))
     }
 
     if (updatesToSave.length > 0) {
@@ -770,33 +732,43 @@ export async function batchSyncLocationCoords(): Promise<BatchResult> {
     let updatedCount = 0
     const bulkUpdates: MemorialRow[] = []
 
-    for (const m of rows) {
-      const update: MemorialUpdate = {}
-      const coords = m.coords as { lat: number; lon: number } | null
-      let apiCalled = false
+    const BATCH_SIZE = 5
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const chunk = rows.slice(i, i + BATCH_SIZE)
+      let chunkApiCalled = false
 
-      // Case 1: Has Location but missing/default Coordinates
-      if (m.city && m.location && (!coords || (coords.lat === 35.6892 && coords.lon === 51.3890))) {
-        apiCalled = true
-        const newCoords = await geocodeLocation(m.city, m.location)
-        if (newCoords) update.coords = newCoords
-      }
-      // Case 2: Has Coordinates but missing Location text
-      else if (coords && (!m.location || m.location === '')) {
-        apiCalled = true
-        const info = await reverseGeocode(coords.lat, coords.lon)
-        if (info) {
-          update.location = info.location
-          if (!m.city) update.city = info.city
+      await Promise.all(chunk.map(async (m) => {
+        const update: MemorialUpdate = {}
+        const coords = m.coords as { lat: number; lon: number } | null
+        let itemApiCalled = false
+
+        // Case 1: Has Location but missing/default Coordinates
+        if (m.city && m.location && (!coords || (coords.lat === 35.6892 && coords.lon === 51.3890))) {
+          itemApiCalled = true
+          const newCoords = await geocodeLocation(m.city, m.location)
+          if (newCoords) update.coords = newCoords
         }
-      }
+        // Case 2: Has Coordinates but missing Location text
+        else if (coords && (!m.location || m.location === '')) {
+          itemApiCalled = true
+          const info = await reverseGeocode(coords.lat, coords.lon)
+          if (info) {
+            update.location = info.location
+            if (!m.city) update.city = info.city
+          }
+        }
 
-      if (Object.keys(update).length > 0) {
-        bulkUpdates.push({ ...m, ...update } as MemorialRow)
-        updatedCount++
-      }
+        if (Object.keys(update).length > 0) {
+          bulkUpdates.push({ ...m, ...update } as MemorialRow)
+          updatedCount++
+        }
 
-      if (apiCalled) {
+        if (itemApiCalled) {
+          chunkApiCalled = true
+        }
+      }))
+
+      if (chunkApiCalled) {
         await new Promise(r => setTimeout(r, 500))
       }
     }

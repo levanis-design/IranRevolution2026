@@ -10,7 +10,7 @@ const t = (key: string, vars?: Record<string, string | number>) => {
 }
 
 describe('renderPhotoFigure', () => {
-  it('keeps non-active slides lazy-loaded for sensitive media carousels', () => {
+  it('renders all slides without loading attribute for sensitive media carousels', () => {
     const html = renderPhotoFigure({
       photos: ['https://example.com/1.jpg', 'https://example.com/2.jpg', 'https://example.com/3.jpg'],
       displayName: 'Nika',
@@ -25,7 +25,7 @@ describe('renderPhotoFigure', () => {
 
     expect(container.querySelector('.sensitive-content')).not.toBeNull()
     expect(images).toHaveLength(3)
-    expect(images.map((img) => img.getAttribute('loading'))).toEqual(['eager', 'lazy', 'lazy'])
+    expect(images.map((img) => img.getAttribute('loading'))).toEqual([null, null, null])
   })
 
   it('deduplicates repeated photos before rendering slides', () => {

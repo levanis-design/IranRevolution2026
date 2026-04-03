@@ -60,37 +60,65 @@ async function run() {
 
   console.log(`📊 Total with photo: ${all.length} | With Telegram source: ${withTelegram.length}`)
 
+  if (withTelegram.length === 0) {
+    console.log('✅ No entries with Telegram photos to check.')
+    return
+  }
+
   let cleared = 0, kept = 0, errors = 0
+  const CHUNK_SIZE = 5
 
-  for (let i = 0; i < withTelegram.length; i++) {
-    const m = withTelegram[i]
-    const media = m.media || {}
-    const sources: { url?: string }[] = m.source_links || []
-    const tgUrl = media.telegramPost || sources.find((s: { url?: string }) => s.url?.includes('t.me/'))?.url
+  for (let i = 0; i < withTelegram.length; i += CHUNK_SIZE) {
+    const chunk = withTelegram.slice(i, i + CHUNK_SIZE)
 
-    if (!tgUrl) { kept++; continue }
+    // Process a chunk concurrently
+    const results = await Promise.all(chunk.map(async (m, chunkIdx) => {
+      const media = m.media || {}
+      const sources: { url?: string }[] = m.source_links || []
+      const tgUrl = media.telegramPost || sources.find((s: { url?: string }) => s.url?.includes('t.me/'))?.url
 
-    process.stdout.write(`[${i + 1}/${withTelegram.length}] ${m.name} ... `)
+      if (!tgUrl) return { m, hasPhoto: null, tgUrl, chunkIdx }
 
-    const hasPhoto = await telegramPostHasPhoto(tgUrl)
-    if (hasPhoto) {
-      console.log('✅ has real photo, keeping')
-      kept++
-    } else {
-      console.log(`🗑️  text-only post — clearing photo${dryRun ? ' (dry run)' : ''}`)
-      if (!dryRun) {
-        const updatedMedia = { ...media }
-        delete updatedMedia.photo
-        const { error } = await supabase.from('memorials').update({ media: updatedMedia }).eq('id', m.id)
-        if (error) { console.error('  ❌ update failed:', error.message); errors++ }
-        else cleared++
+      const hasPhoto = await telegramPostHasPhoto(tgUrl)
+      return { m, hasPhoto, tgUrl, chunkIdx }
+    }))
+
+    // Execute database updates concurrently for this chunk
+    const dbTasks = results.map(async ({ m, hasPhoto, tgUrl, chunkIdx }) => {
+      if (!tgUrl) return { action: 'kept' }
+
+      const idx = i + chunkIdx
+      const msgPrefix = `[${idx + 1}/${withTelegram.length}] ${m.name}`
+
+      if (hasPhoto) {
+        console.log(`${msgPrefix} ... ✅ has real photo, keeping`)
+        return { action: 'kept' }
       } else {
-        cleared++
+        console.log(`${msgPrefix} ... 🗑️  text-only post — clearing photo${dryRun ? ' (dry run)' : ''}`)
+        if (!dryRun) {
+          const updatedMedia = { ...m.media }
+          delete updatedMedia.photo
+          const { error } = await supabase.from('memorials').update({ media: updatedMedia }).eq('id', m.id)
+          if (error) {
+            console.error(`  ❌ update failed: ${error.message}`)
+            return { action: 'error' }
+          }
+        }
+        return { action: 'cleared' }
       }
+    })
+
+    const dbResults = await Promise.all(dbTasks)
+    for (const res of dbResults) {
+      if (res.action === 'kept') kept++
+      else if (res.action === 'cleared') cleared++
+      else if (res.action === 'error') errors++
     }
 
-    // Be polite to Telegram servers
-    await new Promise(r => setTimeout(r, 200))
+    // Be polite to Telegram servers between chunks
+    if (i + CHUNK_SIZE < withTelegram.length) {
+      await new Promise(r => setTimeout(r, 200))
+    }
   }
 
   console.log('\n--- Summary ---')

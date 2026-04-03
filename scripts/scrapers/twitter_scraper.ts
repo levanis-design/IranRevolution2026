@@ -7,7 +7,7 @@ import { join } from 'path';
 
 const POSITION_FILE = join(process.cwd(), '.scrape-twitter-position.json');
 
-interface ProcessingStats {
+export interface ProcessingStats {
   successCount: number;
   skipCount: number;
   errorCount: number;
@@ -126,7 +126,7 @@ async function fetchTwitterTweet(tweetId: string): Promise<string | null> {
   }
 }
 
-async function processTwitterTweet(
+export async function processTwitterTweet(
   tweetId: string,
   username: string,
   memorialUrls: Set<string>,
@@ -161,41 +161,47 @@ async function processTwitterTweet(
 
     const imageUrl = await extractSocialImage(tweetUrl);
 
-    for (const data of victims) {
-      if (!data.name) {
-        console.log(`Skipping invalid victim in tweet: ${tweetUrl}`);
-        continue;
-      }
-
-      const entry: Partial<MemorialEntry> = {
-        ...data,
-        media: imageUrl ? { photo: imageUrl } : undefined,
-        references: [
-          {
-            label: `@${username} (Twitter/X)`,
-            url: tweetUrl
+    const chunkSize = 5;
+    for (let i = 0; i < victims.length; i += chunkSize) {
+      const chunk = victims.slice(i, i + chunkSize);
+      await Promise.all(
+        chunk.map(async (data) => {
+          if (!data.name) {
+            console.log(`Skipping invalid victim in tweet: ${tweetUrl}`);
+            return;
           }
-        ]
-      };
 
-      const result = await submitMemorial(entry);
+          const entry: Partial<MemorialEntry> = {
+            ...data,
+            media: imageUrl ? { photo: imageUrl } : undefined,
+            references: [
+              {
+                label: `@${username} (Twitter/X)`,
+                url: tweetUrl
+              }
+            ]
+          };
 
-      if (result.success) {
-        if (result.merged) {
-          console.log(`Match found for "${data.name}". Added Twitter as reference.`);
-        } else {
-          console.log(`Successfully added new entry (unverified): ${data.name}`);
-        }
-        stats.successCount++;
-      } else {
-        if (result.error?.includes('already exist')) {
-          console.log(`Reference already exists for ${data.name}.`);
-          stats.skipCount++;
-        } else {
-          console.error(`Failed to submit ${data.name}: ${result.error}`);
-          stats.errorCount++;
-        }
-      }
+          const result = await submitMemorial(entry);
+
+          if (result.success) {
+            if (result.merged) {
+              console.log(`Match found for "${data.name}". Added Twitter as reference.`);
+            } else {
+              console.log(`Successfully added new entry (unverified): ${data.name}`);
+            }
+            stats.successCount++;
+          } else {
+            if (result.error?.includes('already exist')) {
+              console.log(`Reference already exists for ${data.name}.`);
+              stats.skipCount++;
+            } else {
+              console.error(`Failed to submit ${data.name}: ${result.error}`);
+              stats.errorCount++;
+            }
+          }
+        })
+      );
     }
 
     updateLastScrapedTweet(username, tweetId);
@@ -288,4 +294,6 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch(console.error);
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(console.error);
+}

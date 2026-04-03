@@ -7,7 +7,7 @@ import { fetchMemorials, verifyMemorial } from '../src/modules/dataService';
  * This is a curated, reputable human rights database — no manual review needed
  */
 
-async function batchVerifyIranVictims(): Promise<void> {
+export async function batchVerifyIranVictims(): Promise<void> {
   console.log('🚀 Batch Verifying iranvictims.com Submissions...\n');
 
   // Fetch all memorials including unverified
@@ -32,36 +32,44 @@ async function batchVerifyIranVictims(): Promise<void> {
   let merged = 0;
   let errors = 0;
 
-  for (const memorial of ivSubmissions) {
-    try {
-      if (!memorial.id) {
-        console.error(`  ❌ Skipping entry without ID: ${memorial.name}`);
-        errors++;
-        continue;
-      }
+  // Process in chunks of 5
+  const chunkSize = 5;
+  for (let i = 0; i < ivSubmissions.length; i += chunkSize) {
+    const chunk = ivSubmissions.slice(i, i + chunkSize);
 
-      console.log(`Verifying: ${memorial.name} (${memorial.city})`);
-
-      const result = await verifyMemorial(memorial.id);
-
-      if (result.success) {
-        if (result.merged) {
-          console.log(`  🔄 Merged with existing entry`);
-          merged++;
-        } else {
-          console.log(`  ✅ Verified`);
-          approved++;
+    await Promise.all(chunk.map(async (memorial) => {
+      try {
+        if (!memorial.id) {
+          console.error(`  ❌ Skipping entry without ID: ${memorial.name}`);
+          errors++;
+          return;
         }
-      } else {
-        console.log(`  ❌ Failed: ${result.error}`);
+
+        console.log(`Verifying: ${memorial.name} (${memorial.city})`);
+
+        const result = await verifyMemorial(memorial.id);
+
+        if (result.success) {
+          if (result.merged) {
+            console.log(`  🔄 Merged with existing entry`);
+            merged++;
+          } else {
+            console.log(`  ✅ Verified`);
+            approved++;
+          }
+        } else {
+          console.log(`  ❌ Failed: ${result.error}`);
+          errors++;
+        }
+      } catch (error) {
+        console.error(`  ❌ Error: ${error}`);
         errors++;
       }
+    }));
 
-      // Small delay to avoid rate limits
+    // Small delay to avoid rate limits between chunks
+    if (i + chunkSize < ivSubmissions.length) {
       await new Promise(resolve => setTimeout(resolve, 300));
-    } catch (error) {
-      console.error(`  ❌ Error: ${error}`);
-      errors++;
     }
   }
 
@@ -75,4 +83,10 @@ async function batchVerifyIranVictims(): Promise<void> {
   console.log('═══════════════════════════════════════');
 }
 
-batchVerifyIranVictims().catch(console.error);
+// Only run if called directly
+import { fileURLToPath } from 'url';
+import { resolve } from 'path';
+
+if (process.argv[1] && resolve(fileURLToPath(import.meta.url)) === resolve(process.argv[1])) {
+  batchVerifyIranVictims().catch(console.error);
+}
