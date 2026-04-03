@@ -437,3 +437,104 @@ describe('translateMemorialData', () => {
     });
   });
 });
+
+describe('reverseGeocode', () => {
+  let mockFetch: ReturnType<typeof vi.fn>;
+  let reverseGeocode: (lat: number, lon: number) => Promise<{ location: string; city: string } | null>;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    mockFetch = vi.fn();
+    global.fetch = mockFetch;
+
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const aiModule = await import('../ai');
+    reverseGeocode = aiModule.reverseGeocode;
+  });
+
+  afterEach(() => {
+    global.fetch = globalFetch;
+    vi.clearAllMocks();
+  });
+
+  it('returns location and city when API responds with specific address details', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        address: {
+          neighbourhood: 'Azadi Sq',
+          city: 'Tehran'
+        }
+      })
+    });
+
+    const result = await reverseGeocode(35.6997, 51.3380);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://nominatim.openstreetmap.org/reverse?format=json&lat=35.6997&lon=51.338&zoom=18&addressdetails=1',
+      expect.any(Object)
+    );
+    expect(result).toEqual({ location: 'Azadi Sq', city: 'Tehran' });
+  });
+
+  it('falls back to broader address details if neighbourhood/city is missing', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        address: {
+          road: 'Enghelab St',
+          state: 'Tehran Province'
+        }
+      })
+    });
+
+    const result = await reverseGeocode(35.7, 51.4);
+    expect(result).toEqual({ location: 'Enghelab St', city: 'Tehran Province' });
+  });
+
+  it('returns null if the address object is missing from the response', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({})
+    });
+
+    const result = await reverseGeocode(35.7, 51.4);
+    expect(result).toBeNull();
+  });
+
+  it('returns null if neither location nor city could be found in the address', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        address: {
+          country: 'Iran',
+          postcode: '12345'
+        }
+      })
+    });
+
+    const result = await reverseGeocode(35.7, 51.4);
+    expect(result).toBeNull();
+  });
+
+  it('returns null and logs error if API response is not ok', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      statusText: 'Bad Request'
+    });
+
+    const result = await reverseGeocode(35.7, 51.4);
+    expect(result).toBeNull();
+    expect(console.error).toHaveBeenCalledWith('Reverse Geocoding Error:', expect.any(Error));
+  });
+
+  it('returns null and logs error if fetch throws an exception', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+    const result = await reverseGeocode(35.7, 51.4);
+    expect(result).toBeNull();
+    expect(console.error).toHaveBeenCalledWith('Reverse Geocoding Error:', expect.any(Error));
+  });
+});
