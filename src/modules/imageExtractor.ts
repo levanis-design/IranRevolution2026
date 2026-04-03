@@ -219,7 +219,7 @@ export async function extractTelegramImage(url: string): Promise<string | null> 
 /**
  * Extracts the primary image URL from an X (Twitter) post using Jina Reader and OpenRouter.
  */
-export async function extractXPostImage(url: string): Promise<string | null> {
+async function extractXPostImage(url: string): Promise<string | null> {
   if (!url || (!url.includes('x.com') && !url.includes('twitter.com'))) {
     return null;
   }

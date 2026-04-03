@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mapRowToEntry, deleteMemorial, deleteReport } from '../dataService'
+import { mapRowToEntry, deleteMemorial, deleteReport, findDuplicateMemorialClient } from '../dataService'
+import type { MemorialEntry } from '../types'
 
 const { mockSupabase, mockSupabaseAdmin } = vi.hoisted(() => ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -240,5 +241,107 @@ describe('deleteReport', () => {
     const result = await deleteReport(mockId)
 
     expect(result).toEqual({ success: false, error: 'Network error' })
+  })
+})
+
+describe('findDuplicateMemorialClient', () => {
+  const memorials: MemorialEntry[] = [
+    {
+      id: '1',
+      name: 'John Doe',
+      name_fa: 'جان دو',
+      city: 'Tehran',
+      city_fa: 'تهران',
+      location: '',
+      date: '2023-01-01',
+      coords: { lat: 35.6, lon: 51.4 },
+      bio: '',
+      references: [],
+      verified: true
+    },
+    {
+      id: '2',
+      name: 'Ali Reza',
+      name_fa: 'علی رضا',
+      city: 'Shiraz',
+      city_fa: 'شیراز',
+      location: 'Valiasr St',
+      date: '2023-01-01',
+      coords: { lat: 29.5, lon: 52.5 },
+      bio: '',
+      references: [],
+      verified: true
+    },
+    {
+      id: '3',
+      name: 'Seyyed Hassan',
+      name_fa: 'سید حسن',
+      city: 'Isfahan',
+      city_fa: 'اصفهان',
+      location: '',
+      date: '2023-01-01',
+      coords: { lat: 32.6, lon: 51.6 },
+      bio: '',
+      references: [],
+      verified: true
+    }
+  ]
+
+  it('returns undefined if both English and Persian names are too short', () => {
+    expect(findDuplicateMemorialClient(memorials, 'Jo', '', 'جا')).toBeUndefined()
+  })
+
+  it('finds an exact English name match when the city matches', () => {
+    const result = findDuplicateMemorialClient(memorials, 'John Doe', 'Tehran')
+    expect(result?.id).toBe('1')
+  })
+
+  it('finds an exact English name match when the query city is omitted', () => {
+    const result = findDuplicateMemorialClient(memorials, 'John Doe')
+    expect(result?.id).toBe('1')
+  })
+
+  it('does not match an exact English name when the city conflicts', () => {
+    const result = findDuplicateMemorialClient(memorials, 'John Doe', 'Shiraz')
+    expect(result).toBeUndefined()
+  })
+
+  it('finds an exact Persian name match', () => {
+    const result = findDuplicateMemorialClient(memorials, '', undefined, 'علی رضا')
+    expect(result?.id).toBe('2')
+  })
+
+  it('matches Persian partial name parts', () => {
+    const expandedMemorials = [...memorials, { ...memorials[1], name_fa: 'علی رضا محمدی' }]
+    const result = findDuplicateMemorialClient(expandedMemorials, '', undefined, 'علی رضا')
+    expect(result?.id).toBe('2')
+  })
+
+  it('matches significant English name parts with a matching city or location', () => {
+    const expandedMemorials = [...memorials, { ...memorials[1], name: 'Ali Reza Mohammadi' }]
+    const result = findDuplicateMemorialClient(expandedMemorials, 'Ali Reza', 'Shiraz')
+    expect(result?.id).toBe('2')
+  })
+
+  it('ignores common prefixes when evaluating partial English matches', () => {
+    expect(findDuplicateMemorialClient(memorials, 'Seyyed Hass', 'Isfahan')?.id).toBe('3')
+    expect(findDuplicateMemorialClient(memorials, 'Seyyed Has', 'Isfahan')).toBeUndefined()
+  })
+
+  it('matches long English names by substring inclusion', () => {
+    const expandedMemorials = [...memorials, { ...memorials[0], id: '4', name: 'John Doe Smith' }]
+    const result = findDuplicateMemorialClient(expandedMemorials, 'John Doe Sm')
+    expect(result?.id).toBe('4')
+  })
+
+  it('matches long Persian names by substring inclusion', () => {
+    const expandedMemorials = [...memorials, { ...memorials[0], id: '5', name_fa: 'محمد علی احمدی' }]
+    const result = findDuplicateMemorialClient(expandedMemorials, '', undefined, 'محمد علی')
+    expect(result?.id).toBe('5')
+  })
+
+  it('respects excludeId when finding duplicates', () => {
+    const result = findDuplicateMemorialClient(memorials, 'John Doe', 'Tehran', undefined, '1')
+    expect(result).toBeUndefined()
   })
 })
