@@ -55,7 +55,7 @@ async function fetchAndUploadTelegramImage(url: string): Promise<string | null> 
 /**
  * Extracts the primary image URL from an Instagram post using Jina Reader and OpenRouter.
  */
-export async function extractInstagramImage(url: string): Promise<string | null> {
+async function extractInstagramImage(url: string): Promise<string | null> {
   if (!url || !url.includes('instagram.com')) {
     return null;
   }
