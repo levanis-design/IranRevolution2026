@@ -1,4 +1,4 @@
-import { supabase, supabaseAdmin } from './supabase'
+import { supabase, supabaseAdmin, cacheImageFromUrl, isSupabaseStorageUrl } from './supabase'
 import { extractSocialImage } from './imageExtractor'
 import { translateMemorialData, geocodeLocation, reverseGeocode } from './ai'
 import { logger } from './logger'
@@ -11,6 +11,16 @@ type MemorialUpdate = Database['public']['Tables']['memorials']['Update']
 export type ReportRow = Database['public']['Tables']['reports']['Row']
 type ReportInsert = Database['public']['Tables']['reports']['Insert']
 type ReferenceLink = { label: string; url: string }
+
+async function normalizePhotoUrl(photoUrl: string | undefined): Promise<string | undefined> {
+  if (!photoUrl || isSupabaseStorageUrl(photoUrl)) return photoUrl
+
+  const cached = await cacheImageFromUrl(photoUrl, photoUrl.includes('telesco.pe')
+    ? { headers: { Referer: 'https://t.me/' } }
+    : undefined)
+
+  return cached || photoUrl
+}
 
 // ============================================================================
 // Type-Safe Query Helpers
@@ -500,11 +510,25 @@ export async function submitMemorial(
           const photo = await extractSocialImage(url)
           if (photo) {
             if (!entry.media) entry.media = {}
-            entry.media.photo = photo
+            entry.media.photo = await normalizePhotoUrl(photo)
           }
         }
       } catch {
         // Silently fail auto-extraction
+      }
+    }
+
+    if (entry.media?.photo) {
+      entry.media.photo = await normalizePhotoUrl(entry.media.photo)
+    }
+
+    if (entry.media?.photos?.length) {
+      const normalizedPhotos = await Promise.all(
+        entry.media.photos.map(photo => normalizePhotoUrl(photo))
+      )
+      entry.media.photos = normalizedPhotos.filter((photo): photo is string => !!photo)
+      if (!entry.media.photo && entry.media.photos.length > 0) {
+        entry.media.photo = entry.media.photos[0]
       }
     }
 
@@ -575,7 +599,8 @@ export async function batchUpdateImages(): Promise<BatchResult> {
       const media = m.media as Record<string, unknown> | null
       const refs = m.source_links as ReferenceLink[] | null
       const hasInsta = refs && refs.some(r => r.url && r.url.includes('instagram.com'))
-      return (media?.xPost || media?.telegramPost || hasInsta) && !media?.photo
+      return (media?.xPost || media?.telegramPost || hasInsta) &&
+        (!media?.photo || (typeof media.photo === 'string' && !isSupabaseStorageUrl(media.photo)))
     })
 
     if (targets.length === 0) return { success: true, count: 0 }
@@ -598,7 +623,8 @@ export async function batchUpdateImages(): Promise<BatchResult> {
         const photo = await extractSocialImage(url)
 
         if (photo) {
-          const updatedMedia = { ...media, photo }
+          const normalizedPhoto = await normalizePhotoUrl(photo)
+          const updatedMedia = { ...media, photo: normalizedPhoto || photo }
           bulkUpdates.push({ ...m, media: updatedMedia })
         }
       }))

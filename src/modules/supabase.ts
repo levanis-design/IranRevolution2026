@@ -26,12 +26,39 @@ export const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey)
 
 const BUCKET_NAME = 'memorial-images'
 
+export function isSupabaseStorageUrl(url: string | null | undefined): boolean {
+  return !!(url && supabaseUrl && url.includes(supabaseUrl))
+}
+
+function guessImageExtension(originalUrl: string): string {
+  try {
+    const parsed = new URL(originalUrl)
+    const pathname = parsed.pathname.toLowerCase()
+    const pathMatch = pathname.match(/\.([a-z0-9]{2,5})$/i)
+    if (pathMatch) {
+      return pathMatch[1] === 'jpg' ? 'jpg' : pathMatch[1]
+    }
+
+    const format = parsed.searchParams.get('format')?.toLowerCase()
+    if (format && /^(jpg|jpeg|png|webp|gif|heic|avif)$/i.test(format)) {
+      return format === 'jpeg' ? 'jpg' : format
+    }
+  } catch {
+    const fallbackMatch = originalUrl.toLowerCase().match(/\.([a-z0-9]{2,5})(?:\?|$)/i)
+    if (fallbackMatch) {
+      return fallbackMatch[1] === 'jpeg' ? 'jpg' : fallbackMatch[1]
+    }
+  }
+
+  return 'jpg'
+}
+
 export async function uploadImageToSupabase(buffer: Buffer | ArrayBuffer, originalUrl: string): Promise<string | null> {
   const client = supabaseAdmin || supabase
   if (!client) return null
 
   try {
-    const ext = originalUrl.split('.').pop()?.split('?')[0] || 'jpg'
+    const ext = guessImageExtension(originalUrl)
     const filename = `${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2)}.${ext}`
     
     const { error } = await client.storage
@@ -53,6 +80,25 @@ export async function uploadImageToSupabase(buffer: Buffer | ArrayBuffer, origin
     return publicUrl
   } catch (error) {
     logger.error('Upload exception:', error)
+    return null
+  }
+}
+
+export async function cacheImageFromUrl(url: string, init?: RequestInit): Promise<string | null> {
+  if (!url) return null
+  if (isSupabaseStorageUrl(url)) return url
+
+  try {
+    const response = await fetch(url, init)
+    if (!response.ok) {
+      logger.error('Image download failed:', response.status, response.statusText, url)
+      return null
+    }
+
+    const buffer = await response.arrayBuffer()
+    return await uploadImageToSupabase(buffer, url)
+  } catch (error) {
+    logger.error('Image cache exception:', error)
     return null
   }
 }

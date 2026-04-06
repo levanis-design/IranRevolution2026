@@ -125,4 +125,50 @@ describe('uploadImageToSupabase', () => {
       }
     )
   })
+
+  it('uses the format query parameter when the path has no file extension', async () => {
+    const { uploadImageToSupabase } = await import('../supabase')
+
+    mockUpload.mockResolvedValueOnce({ error: null })
+    mockGetPublicUrl.mockReturnValueOnce({ data: { publicUrl: 'mock-url' } })
+
+    vi.stubGlobal('crypto', { randomUUID: () => 'test-uuid' })
+
+    await uploadImageToSupabase(
+      new ArrayBuffer(8),
+      'https://pbs.twimg.com/media/G_zbS38bUAQ7Crj?format=jpg&name=small'
+    )
+
+    expect(mockUpload).toHaveBeenCalledWith(
+      'test-uuid.jpg',
+      expect.any(ArrayBuffer),
+      {
+        contentType: 'image/jpeg',
+        upsert: false
+      }
+    )
+  })
+
+  it('defaults to jpg for extensionless URLs without a format query parameter', async () => {
+    const { uploadImageToSupabase } = await import('../supabase')
+
+    mockUpload.mockResolvedValueOnce({ error: null })
+    mockGetPublicUrl.mockReturnValueOnce({ data: { publicUrl: 'mock-url' } })
+
+    vi.stubGlobal('crypto', { randomUUID: () => 'test-uuid' })
+
+    await uploadImageToSupabase(
+      new ArrayBuffer(8),
+      'https://example.com/image'
+    )
+
+    expect(mockUpload).toHaveBeenCalledWith(
+      'test-uuid.jpg',
+      expect.any(ArrayBuffer),
+      {
+        contentType: 'image/jpeg',
+        upsert: false
+      }
+    )
+  })
 })
