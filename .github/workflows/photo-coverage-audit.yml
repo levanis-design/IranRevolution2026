@@ -1,0 +1,37 @@
+name: Photo Coverage Audit
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Generate photo coverage report
+        run: npx tsx scripts/report_photo_coverage.ts --output-dir artifacts/photo-coverage
+
+      - name: Publish step summary
+        run: cat artifacts/photo-coverage/photo-coverage.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload photo coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: photo-coverage-report
+          path: artifacts/photo-coverage/

@@ -22,22 +22,41 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false, autoRefreshToken: false }
 })
 
-function getSocialUrl(memorial: any): string | null {
+function isImageSourceUrl(url: string | undefined): boolean {
+  if (!url) return false
+  return url.includes('t.me/') ||
+    url.includes('instagram.com') ||
+    url.includes('x.com') ||
+    url.includes('twitter.com') ||
+    url.includes('hengaw.net') ||
+    url.includes('wikipedia.org')
+}
+
+function getSocialUrls(memorial: any): string[] {
   const media = memorial.media || {}
   const sources: { url?: string }[] = memorial.source_links || []
+  const ordered: string[] = []
 
-  // Priority: Telegram > Instagram > X
-  if (media.telegramPost) return media.telegramPost
+  const pushUnique = (url: string | undefined) => {
+    if (!url || !isImageSourceUrl(url) || ordered.includes(url)) return
+    ordered.push(url)
+  }
 
-  const tgSource = sources.find(r => r.url?.includes('t.me/'))
-  if (tgSource?.url) return tgSource.url
+  pushUnique(media.telegramPost)
+  for (const source of sources) {
+    if (source.url?.includes('t.me/')) pushUnique(source.url)
+  }
 
-  const igSource = sources.find(r => r.url?.includes('instagram.com'))
-  if (igSource?.url) return igSource.url
+  for (const source of sources) {
+    if (source.url?.includes('instagram.com')) pushUnique(source.url)
+  }
 
-  if (media.xPost) return media.xPost
+  pushUnique(media.xPost)
+  for (const source of sources) {
+    if (source.url?.includes('x.com') || source.url?.includes('twitter.com')) pushUnique(source.url)
+  }
 
-  return null
+  return ordered
 }
 
 async function downloadImage(url: string): Promise<Buffer | null> {
@@ -68,60 +87,89 @@ async function run() {
 
   const targets = all.filter(m => {
     if (m.media?.photo) return false
-    return getSocialUrl(m) !== null
+    return getSocialUrls(m).length > 0
   })
 
   console.log(`📊 Total: ${all.length} | No photo: ${all.filter(m => !m.media?.photo).length} | Actionable: ${targets.length}`)
   if (dryRun) {
     for (const m of targets.slice(0, 20)) {
-      console.log(`  [DRY RUN] ${m.name} → ${getSocialUrl(m)}`)
+      console.log(`  [DRY RUN] ${m.name} → ${getSocialUrls(m).join(' | ')}`)
     }
     if (targets.length > 20) console.log(`  ... and ${targets.length - 20} more`)
     return
   }
 
   let updated = 0, failed = 0
-  for (let i = 0; i < targets.length; i++) {
-    const m = targets[i]
-    const sourceUrl = getSocialUrl(m)!
-    process.stdout.write(`[${i + 1}/${targets.length}] ${m.name} ... `)
+  const CONCURRENCY = 5
+
+  async function processMemorial(m: any, index: number) {
+    const sourceUrls = getSocialUrls(m)
+    process.stdout.write(`[${index + 1}/${targets.length}] ${m.name} ... `)
 
     try {
-      const photoUrl = await extractSocialImage(sourceUrl)
-      if (!photoUrl) { console.log('❌ no image extracted'); failed++; continue }
+      let photoUrl: string | null = null
+      for (const sourceUrl of sourceUrls) {
+        photoUrl = await extractSocialImage(sourceUrl)
+        if (photoUrl) break
+      }
+      if (!photoUrl) {
+        console.log('❌ no image extracted')
+        failed++
+        return
+      }
 
-      // If already a Supabase URL (Telegram cached), use directly
       if (supabaseUrl && photoUrl.includes(supabaseUrl)) {
         const updatedMedia = { ...(m.media || {}), photo: photoUrl }
         const { error } = await supabase.from('memorials').update({ media: updatedMedia }).eq('id', m.id)
-        if (error) { console.log(`❌ update failed: ${error.message}`); failed++ }
-        else { console.log(`✅ (cached) ${photoUrl.split('/').pop()}`); updated++ }
-        continue
+        if (error) {
+          console.log(`❌ update failed: ${error.message}`)
+          failed++
+        } else {
+          console.log(`✅ (cached) ${photoUrl.split('/').pop()}`)
+          updated++
+        }
+        return
       }
 
       const buffer = await downloadImage(photoUrl)
-      if (!buffer) { console.log('❌ download failed'); failed++; continue }
+      if (!buffer) {
+        console.log('❌ download failed')
+        failed++
+        return
+      }
 
       const storedUrl = await uploadImageToSupabase(buffer, photoUrl)
-      if (!storedUrl) { console.log('❌ upload failed'); failed++; continue }
+      if (!storedUrl) {
+        console.log('❌ upload failed')
+        failed++
+        return
+      }
 
       const updatedMedia = { ...(m.media || {}), photo: storedUrl }
       const { error } = await supabase.from('memorials').update({ media: updatedMedia }).eq('id', m.id)
-      if (error) { console.log(`❌ update failed: ${error.message}`); failed++ }
-      else { console.log(`✅ ${storedUrl.split('/').pop()}`); updated++ }
-
+      if (error) {
+        console.log(`❌ update failed: ${error.message}`)
+        failed++
+      } else {
+        console.log(`✅ ${storedUrl.split('/').pop()}`)
+        updated++
+      }
     } catch (e) {
       console.log(`❌ error: ${e instanceof Error ? e.message : e}`)
       failed++
     }
+  }
 
+  for (let i = 0; i < targets.length; i += CONCURRENCY) {
+    const batch = targets.slice(i, i + CONCURRENCY)
+    await Promise.all(batch.map((m, batchIndex) => processMemorial(m, i + batchIndex)))
     await new Promise(r => setTimeout(r, 300))
   }
 
   console.log('\n--- Summary ---')
   console.log(`✅ Updated: ${updated}`)
   console.log(`❌ Failed:  ${failed}`)
-  console.log(`⏭️  No source: ${all.filter(m => !m.media?.photo && !getSocialUrl(m)).length}`)
+  console.log(`⏭️  No source: ${all.filter(m => !m.media?.photo && getSocialUrls(m).length === 0).length}`)
 }
 
 run().catch(console.error)

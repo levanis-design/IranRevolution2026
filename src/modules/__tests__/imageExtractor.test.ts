@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { extractTelegramImage } from '../imageExtractor';
+import { extractSocialImage, extractTelegramImage } from '../imageExtractor';
 import { uploadImageToSupabase } from '../supabase';
 
 vi.mock('../supabase', () => ({
@@ -318,5 +318,77 @@ describe('extractTelegramImage', () => {
 
       expect(result).toBeNull();
     });
+  });
+});
+
+describe('extractSocialImage article fallback', () => {
+  const originalFetch = global.fetch;
+  let mockFetch: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetch = vi.fn();
+    global.fetch = mockFetch;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it('extracts og:image from a Hengaw article', async () => {
+    const url = 'https://hengaw.net/en/news/2026/03/article-50-1';
+    mockFetch.mockResolvedValue({
+      ok: true,
+      text: async () => `
+        <html>
+          <head>
+            <meta property="og:image" content="https://hengaw.net/content/upload/1/root/example.jpg" />
+          </head>
+        </html>
+      `
+    });
+
+    const result = await extractSocialImage(url);
+
+    expect(result).toBe('https://hengaw.net/content/upload/1/root/example.jpg');
+    expect(mockFetch).toHaveBeenCalledWith(url, { redirect: 'follow' });
+  });
+
+  it('extracts a Wikipedia article image from og:image', async () => {
+    const url = 'https://fa.wikipedia.org/wiki/test';
+    mockFetch.mockResolvedValue({
+      ok: true,
+      text: async () => `
+        <html>
+          <head>
+            <meta property="og:image" content="https://upload.wikimedia.org/wikipedia/commons/test.jpg" />
+          </head>
+        </html>
+      `
+    });
+
+    const result = await extractSocialImage(url);
+
+    expect(result).toBe('https://upload.wikimedia.org/wikipedia/commons/test.jpg');
+  });
+
+  it('falls back to the first non-logo image when no og:image is present', async () => {
+    const url = 'https://hengaw.net/en/news/2026/03/article-50-1';
+    mockFetch.mockResolvedValue({
+      ok: true,
+      text: async () => `
+        <html>
+          <body>
+            <img src="/content/upload/1/defaults/hengaw.png" />
+            <img src="/content/upload/1/root/story-image.jpg" />
+          </body>
+        </html>
+      `
+    });
+
+    const result = await extractSocialImage(url);
+
+    expect(result).toBe('https://hengaw.net/content/upload/1/root/story-image.jpg');
   });
 });

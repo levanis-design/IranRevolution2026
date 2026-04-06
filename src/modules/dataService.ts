@@ -12,6 +12,45 @@ export type ReportRow = Database['public']['Tables']['reports']['Row']
 type ReportInsert = Database['public']['Tables']['reports']['Insert']
 type ReferenceLink = { label: string; url: string }
 
+function isImageSourceUrl(url: string | undefined): boolean {
+  if (!url) return false
+  return url.includes('t.me/') ||
+    url.includes('instagram.com') ||
+    url.includes('x.com') ||
+    url.includes('twitter.com') ||
+    url.includes('hengaw.net') ||
+    url.includes('wikipedia.org')
+}
+
+function getCandidateImageSourceUrls(
+  media: { xPost?: string; telegramPost?: string } | null | undefined,
+  refs: ReferenceLink[] | null | undefined
+): string[] {
+  const ordered: string[] = []
+  const pushUnique = (url: string | undefined) => {
+    if (!url || !isImageSourceUrl(url) || ordered.includes(url)) return
+    ordered.push(url)
+  }
+
+  pushUnique(media?.telegramPost)
+
+  for (const ref of refs || []) {
+    if (ref.url?.includes('t.me/')) pushUnique(ref.url)
+  }
+
+  for (const ref of refs || []) {
+    if (ref.url?.includes('instagram.com')) pushUnique(ref.url)
+  }
+
+  pushUnique(media?.xPost)
+
+  for (const ref of refs || []) {
+    if (ref.url?.includes('x.com') || ref.url?.includes('twitter.com')) pushUnique(ref.url)
+  }
+
+  return ordered
+}
+
 async function normalizePhotoUrl(photoUrl: string | undefined): Promise<string | undefined> {
   if (!photoUrl || isSupabaseStorageUrl(photoUrl)) return photoUrl
 
@@ -495,22 +534,17 @@ export async function submitMemorial(
     }
 
     // Auto-extract image if missing
-    const hasSocialLink =
-      entry.media?.xPost ||
-      entry.media?.telegramPost ||
-      (entry.references && entry.references.some(r => r.url.includes('instagram.com')))
+    const candidateUrls = getCandidateImageSourceUrls(entry.media, entry.references)
+    const hasSocialLink = candidateUrls.length > 0
 
     if (hasSocialLink && !entry.media?.photo) {
       try {
-        const url =
-          entry.media?.xPost ||
-          entry.media?.telegramPost ||
-          entry.references?.find(r => r.url.includes('instagram.com'))?.url
-        if (url) {
+        for (const url of candidateUrls) {
           const photo = await extractSocialImage(url)
           if (photo) {
             if (!entry.media) entry.media = {}
             entry.media.photo = await normalizePhotoUrl(photo)
+            break
           }
         }
       } catch {
@@ -598,8 +632,8 @@ export async function batchUpdateImages(): Promise<BatchResult> {
     const targets = rows.filter(m => {
       const media = m.media as Record<string, unknown> | null
       const refs = m.source_links as ReferenceLink[] | null
-      const hasInsta = refs && refs.some(r => r.url && r.url.includes('instagram.com'))
-      return (media?.xPost || media?.telegramPost || hasInsta) &&
+      const candidateUrls = getCandidateImageSourceUrls(media as Record<string, string> | null, refs)
+      return candidateUrls.length > 0 &&
         (!media?.photo || (typeof media.photo === 'string' && !isSupabaseStorageUrl(media.photo)))
     })
 
@@ -615,17 +649,17 @@ export async function batchUpdateImages(): Promise<BatchResult> {
       await Promise.all(batch.map(async (m) => {
         const media = m.media as Record<string, string>
         const refs = m.source_links as ReferenceLink[]
-        const instaUrl = refs?.find(r => r.url && r.url.includes('instagram.com'))?.url
+        const candidateUrls = getCandidateImageSourceUrls(media, refs)
 
-        const url = instaUrl || media?.telegramPost || media?.xPost
-        if (!url) return
+        for (const url of candidateUrls) {
+          const photo = await extractSocialImage(url)
 
-        const photo = await extractSocialImage(url)
-
-        if (photo) {
-          const normalizedPhoto = await normalizePhotoUrl(photo)
-          const updatedMedia = { ...media, photo: normalizedPhoto || photo }
-          bulkUpdates.push({ ...m, media: updatedMedia })
+          if (photo) {
+            const normalizedPhoto = await normalizePhotoUrl(photo)
+            const updatedMedia = { ...media, photo: normalizedPhoto || photo }
+            bulkUpdates.push({ ...m, media: updatedMedia })
+            break
+          }
         }
       }))
 

@@ -5,6 +5,51 @@ import { uploadImageToSupabase } from './supabase';
 import { logger } from './logger';
 import { fetchJinaReader } from './jinaReader';
 
+function absolutizeUrl(candidate: string, baseUrl: string): string {
+  try {
+    return new URL(candidate, baseUrl).toString();
+  } catch {
+    return candidate;
+  }
+}
+
+function isLikelyContentImage(url: string): boolean {
+  const normalized = url.toLowerCase();
+  return !normalized.includes('logo') &&
+    !normalized.includes('icon') &&
+    !normalized.includes('avatar') &&
+    !normalized.includes('/defaults/') &&
+    !normalized.includes('favicon') &&
+    !normalized.includes('apple-touch-icon');
+}
+
+async function extractArticleImage(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url, { redirect: 'follow' });
+    if (!response.ok) return null;
+
+    const html = await response.text();
+    if (!html || html.length < 100) return null;
+
+    const metaMatches = [
+      ...html.matchAll(/<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]+content=["']([^"']+)["']/gi)
+    ].map(match => absolutizeUrl(match[1], url));
+
+    const metaImage = metaMatches.find(isLikelyContentImage);
+    if (metaImage) return metaImage;
+
+    const imgMatches = [
+      ...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)
+    ].map(match => absolutizeUrl(match[1], url));
+
+    const leadImage = imgMatches.find(isLikelyContentImage);
+    return leadImage || null;
+  } catch (error) {
+    logger.error('Error extracting article image:', error);
+    return null;
+  }
+}
+
 /**
  * Fetches an image from Telegram using the Bot API if possible, or falls back to scraping.
  * Then uploads the image to Supabase.
@@ -143,6 +188,11 @@ export async function extractSocialImage(url: string): Promise<string | null> {
     return extractors.extractInstagramImage(url);
   } else if (url.includes('t.me/')) {
     return extractors.extractTelegramImage(url);
+  } else if (
+    url.includes('hengaw.net') ||
+    url.includes('wikipedia.org')
+  ) {
+    return extractArticleImage(url);
   }
   return null;
 }
