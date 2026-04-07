@@ -3,7 +3,7 @@ import { logger } from './logger';
 import { fetchJinaReader } from './jinaReader';
 
 const OPENROUTER_API_KEY = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env.VITE_OPENROUTER_API_KEY : process.env.VITE_OPENROUTER_API_KEY;
-const OPENROUTER_MODEL = (typeof import.meta !== 'undefined' && import.meta.env) ? (import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free') : (process.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free');
+const OPENROUTER_MODEL = (typeof import.meta !== 'undefined' && import.meta.env) ? (import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash-001') : (process.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash-001');
 
 export interface ExtractedMemorialData extends Partial<MemorialEntry> {
   referenceLabel?: string;
