@@ -343,6 +343,65 @@ function initLanguageSwitcher() {
   })
 }
 
+async function handleReportSubmit(
+  e: Event,
+  form: HTMLFormElement,
+  entry: MemorialEntry,
+  statusDiv: HTMLElement,
+  closeModal: () => void
+) {
+  e.preventDefault()
+  const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement
+  submitBtn.disabled = true
+  submitBtn.textContent = '...'
+
+  const formData = new FormData(form)
+  const report = {
+    memorial_id: entry.id!,
+    memorial_name: entry.name,
+    reason: formData.get('reason') as string,
+    details: formData.get('details') as string
+  }
+
+  const { success, error } = await submitReport(report)
+
+  if (success) {
+    statusDiv.textContent = t('report.success')
+    statusDiv.className = 'report-status success'
+    statusDiv.classList.remove('hidden')
+    setTimeout(closeModal, 2000)
+  } else {
+    submitBtn.disabled = false
+    submitBtn.textContent = t('report.submit')
+
+    let errorMessage = error || t('report.error')
+    if (error?.includes('42P01') || error?.includes('not found')) {
+      errorMessage = `⚠️ Database Error: 'reports' table is missing. Please notify the administrator to create the table.`
+    } else if (error?.includes('42501') || error?.includes('Permission denied')) {
+      errorMessage = `⚠️ Permission Error: The 'reports' table exists but public access is restricted. Please notify the administrator to enable Row-Level Security (RLS) for public inserts.`
+    }
+
+    statusDiv.textContent = errorMessage
+    statusDiv.className = 'report-status error'
+    statusDiv.classList.remove('hidden')
+
+    // Add a fallback link for manual reporting if database fails
+    const fallbackLink = document.createElement('a')
+    fallbackLink.href = `https://github.com/atakhadiviom/IranRevolution2026/issues/new?title=Report+Issue:+${encodeURIComponent(entry.name)}&body=${encodeURIComponent(`I am reporting an issue with the entry for ${entry.name}${entry.id ? ` (ID: ${entry.id})` : ''}.\n\nReason: ${report.reason}\n\nDetails: ${report.details}`)}`
+    fallbackLink.target = '_blank'
+    fallbackLink.className = 'report-link-fallback'
+    fallbackLink.style.display = 'block'
+    fallbackLink.style.marginTop = '1rem'
+    fallbackLink.style.fontSize = '0.8rem'
+    fallbackLink.style.color = 'var(--muted)'
+    fallbackLink.innerHTML = 'Alternative: Click here to report via GitHub'
+
+    if (!statusDiv.querySelector('.report-link-fallback')) {
+      statusDiv.appendChild(fallbackLink)
+    }
+  }
+}
+
 function initReportModal(entry: MemorialEntry) {
   const overlay = document.getElementById('report-modal')
   const close = document.getElementById('close-report-modal')
@@ -393,58 +452,7 @@ function initReportModal(entry: MemorialEntry) {
   const form = document.getElementById('report-form') as HTMLFormElement
   const statusDiv = document.getElementById('report-status')!
 
-  form.onsubmit = async (e) => {
-    e.preventDefault()
-    const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement
-    submitBtn.disabled = true
-    submitBtn.textContent = '...'
-
-    const formData = new FormData(form)
-    const report = {
-      memorial_id: entry.id!,
-      memorial_name: entry.name,
-      reason: formData.get('reason') as string,
-      details: formData.get('details') as string
-    }
-
-    const { success, error } = await submitReport(report)
-
-    if (success) {
-      statusDiv.textContent = t('report.success')
-      statusDiv.className = 'report-status success'
-      statusDiv.classList.remove('hidden')
-      setTimeout(closeModal, 2000)
-    } else {
-      submitBtn.disabled = false
-      submitBtn.textContent = t('report.submit')
-      
-      let errorMessage = error || t('report.error')
-      if (error?.includes('42P01') || error?.includes('not found')) {
-        errorMessage = `⚠️ Database Error: 'reports' table is missing. Please notify the administrator to create the table.`
-      } else if (error?.includes('42501') || error?.includes('Permission denied')) {
-        errorMessage = `⚠️ Permission Error: The 'reports' table exists but public access is restricted. Please notify the administrator to enable Row-Level Security (RLS) for public inserts.`
-      }
-      
-      statusDiv.textContent = errorMessage
-      statusDiv.className = 'report-status error'
-      statusDiv.classList.remove('hidden')
-      
-      // Add a fallback link for manual reporting if database fails
-      const fallbackLink = document.createElement('a')
-      fallbackLink.href = `https://github.com/atakhadiviom/IranRevolution2026/issues/new?title=Report+Issue:+${encodeURIComponent(entry.name)}&body=${encodeURIComponent(`I am reporting an issue with the entry for ${entry.name}${entry.id ? ` (ID: ${entry.id})` : ''}.\n\nReason: ${report.reason}\n\nDetails: ${report.details}`)}`
-      fallbackLink.target = '_blank'
-      fallbackLink.className = 'report-link-fallback'
-      fallbackLink.style.display = 'block'
-      fallbackLink.style.marginTop = '1rem'
-      fallbackLink.style.fontSize = '0.8rem'
-      fallbackLink.style.color = 'var(--muted)'
-      fallbackLink.innerHTML = 'Alternative: Click here to report via GitHub'
-      
-      if (!statusDiv.querySelector('.report-link-fallback')) {
-        statusDiv.appendChild(fallbackLink)
-      }
-    }
-  }
+  form.onsubmit = (e) => handleReportSubmit(e, form, entry, statusDiv, closeModal)
 }
 
 function initFiguresPopup() {
