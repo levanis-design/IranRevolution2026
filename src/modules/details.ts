@@ -1,6 +1,6 @@
 import { t, currentLanguage } from './i18n'
 import type { MemorialEntry } from './types'
-import { escapeHTML } from './domUtils'
+import { escapeHTML, sanitizeUrl } from './domUtils'
 import { logger } from './logger'
 import { renderPhotoFigure, wrapSensitive } from './detailsMedia'
 import { downloadMemorialPdf } from './pdf'
@@ -140,7 +140,8 @@ function buildMediaAndReferencesHTML(entry: MemorialEntry, isFa: boolean): strin
         <ul>
           ${entry.references.map(ref => {
             const label = (!ref.label || ref.label === 'Source') ? labelFromUrl(ref.url) : ref.label
-            return `<li><a href="${escapeHTML(ref.url)}" target="_blank" rel="noopener noreferrer">${escapeHTML(label)}</a></li>`
+            const safeUrl = sanitizeUrl(ref.url)
+            return `<li><a href="${escapeHTML(safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHTML(label)}</a></li>`
           }).join('')}
         </ul>
       </section>
