@@ -113,8 +113,9 @@ function handleImageErrors() {
       const img = target as HTMLImageElement;
       // Prevent infinite loops if the placeholder itself fails to load
       const placeholder = '/lion.png';
-      if (!img.src.includes('/lion.png')) {
-        img.src = placeholder;
+      const placeholderUrl = new URL(placeholder, window.location.href).href;
+      if (img.src !== placeholderUrl) {
+        img.src = placeholderUrl;
       }
     }
   }, true); // useCapture must be true for error events

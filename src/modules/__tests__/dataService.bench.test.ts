@@ -36,7 +36,9 @@ vi.mock('../supabase', () => {
 
   return {
     get supabase() { return mockClient },
-    get supabaseAdmin() { return null }
+    get supabaseAdmin() { return null },
+    isSupabaseStorageUrl: vi.fn().mockReturnValue(false),
+    cacheImageFromUrl: vi.fn().mockImplementation(async (url) => url)
   }
 })
 
