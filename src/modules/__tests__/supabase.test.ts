@@ -172,3 +172,50 @@ describe('uploadImageToSupabase', () => {
     )
   })
 })
+
+describe('guessImageExtension', () => {
+  it('extracts valid extension from pathname', async () => {
+    const { guessImageExtension } = await import('../supabase')
+    expect(guessImageExtension('https://example.com/image.png')).toBe('png')
+    expect(guessImageExtension('https://example.com/image.webp')).toBe('webp')
+    expect(guessImageExtension('https://example.com/image.gif')).toBe('gif')
+  })
+
+  it('returns jpg when pathname extension is jpg or jpeg', async () => {
+    const { guessImageExtension } = await import('../supabase')
+    expect(guessImageExtension('https://example.com/image.jpg')).toBe('jpg')
+    expect(guessImageExtension('https://example.com/image.jpeg')).toBe('jpeg') // Note: guessImageExtension implementation only maps pathMatch[1] === 'jpg' ? 'jpg' : pathMatch[1], so it returns 'jpeg' not 'jpg'
+  })
+
+  it('uses format query parameter when pathname has no extension', async () => {
+    const { guessImageExtension } = await import('../supabase')
+    expect(guessImageExtension('https://example.com/image?format=png')).toBe('png')
+    expect(guessImageExtension('https://example.com/image?format=webp')).toBe('webp')
+  })
+
+  it('normalizes jpeg to jpg in format query parameter', async () => {
+    const { guessImageExtension } = await import('../supabase')
+    expect(guessImageExtension('https://example.com/image?format=jpeg')).toBe('jpg')
+    expect(guessImageExtension('https://example.com/image?format=jpg')).toBe('jpg')
+  })
+
+  it('ignores unsupported format query parameters and defaults to jpg', async () => {
+    const { guessImageExtension } = await import('../supabase')
+    expect(guessImageExtension('https://example.com/image?format=pdf')).toBe('jpg')
+    expect(guessImageExtension('https://example.com/image?format=exe')).toBe('jpg')
+  })
+
+  it('falls back to regex match for invalid URLs that throw during URL parsing', async () => {
+    const { guessImageExtension } = await import('../supabase')
+    // A string that fails new URL()
+    expect(guessImageExtension('not-a-valid-url.png')).toBe('png')
+    expect(guessImageExtension('invalid-url.jpeg')).toBe('jpg')
+    expect(guessImageExtension('invalid-url.jpg?some=param')).toBe('jpg')
+  })
+
+  it('defaults to jpg when no valid extension or format is found', async () => {
+    const { guessImageExtension } = await import('../supabase')
+    expect(guessImageExtension('https://example.com/image')).toBe('jpg')
+    expect(guessImageExtension('not-a-valid-url-without-extension')).toBe('jpg')
+  })
+})

@@ -30,7 +30,7 @@ export function isSupabaseStorageUrl(url: string | null | undefined): boolean {
   return !!(url && supabaseUrl && url.includes(supabaseUrl))
 }
 
-function guessImageExtension(originalUrl: string): string {
+export function guessImageExtension(originalUrl: string): string {
   try {
     const parsed = new URL(originalUrl)
     const pathname = parsed.pathname.toLowerCase()

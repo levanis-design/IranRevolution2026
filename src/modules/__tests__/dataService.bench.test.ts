@@ -36,7 +36,10 @@ vi.mock('../supabase', () => {
 
   return {
     get supabase() { return mockClient },
-    get supabaseAdmin() { return null }
+    get supabaseAdmin() { return null },
+    guessImageExtension: vi.fn().mockReturnValue('jpg'),
+    isSupabaseStorageUrl: vi.fn().mockReturnValue(false),
+    cacheImageFromUrl: vi.fn().mockResolvedValue('http://example.com/cached.jpg')
   }
 })
 
