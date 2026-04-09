@@ -751,13 +751,17 @@ export async function batchTranslateMemorials(): Promise<BatchResult> {
     }
 
     if (updatesToSave.length > 0) {
+      // Create a map for O(1) lookups during normalization
+      const targetMap = new Map<string, MemorialRow>()
+      targets.forEach(t => targetMap.set(t.id, t))
+
       // Normalize objects so they have identical keys to satisfy PostgREST bulk upsert
       const normalizedUpdates = updatesToSave.map(update => {
         const normalized = { ...update }
         allTranslationKeys.forEach(key => {
           if (!(key in normalized)) {
             // Find the original row to get the missing field's current value
-            const originalRow = targets.find(t => t.id === update.id)
+            const originalRow = targetMap.get(update.id)
             if (originalRow) {
               /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
               (normalized as any)[key] = originalRow[key as keyof MemorialRow]
