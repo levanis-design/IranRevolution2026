@@ -5,6 +5,59 @@ import { t, currentLanguage } from './i18n';
 import { logger } from './logger';
 import { escapeHTML } from './domUtils';
 
+export interface PdfTemplateData {
+  displayName: string;
+  displayCity: string;
+  date: string;
+  displayBio: string;
+  isFa: boolean;
+  photoUrl?: string;
+  qrCodeDataUrl: string;
+}
+
+export function generatePdfHtml(data: PdfTemplateData): string {
+  return `
+    <!-- Top Green Band (Header) -->
+    <div style="height: 60px; width: 100%; background-color: #239f40;"></div>
+
+    <!-- Middle White Band (Main Content) -->
+    <div style="flex: 1; width: 100%; background-color: #ffffff; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 30px 20px; box-sizing: border-box; text-align: center; overflow: hidden;">
+      <!-- Lion Logo Background (Semi-transparent) -->
+      <img src="/lion.png" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; opacity: 0.12; z-index: 0;" />
+
+      <div style="position: relative; z-index: 1; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; height: 100%; max-height: 100%;">
+        ${data.photoUrl ? `
+          <div style="margin-bottom: 25px;">
+            <img src="${escapeHTML(data.photoUrl)}" style="width: 280px; height: 280px; object-fit: cover; border-radius: 50%; border: 8px solid #239f40; box-shadow: 0 10px 25px rgba(0,0,0,0.2);" />
+          </div>
+        ` : ''}
+
+        <div style="text-align: center; width: 100%; margin-bottom: 20px;">
+          <h1 style="margin: 0; font-size: 48px; color: #111827; font-weight: 800; line-height: 1.1;">${escapeHTML(data.displayName)}</h1>
+          <p style="margin: 10px 0; font-size: 24px; color: #374151;">
+            <strong>${escapeHTML(t('details.city'))}:</strong> ${escapeHTML(data.displayCity)} | <strong>${escapeHTML(t('details.date'))}:</strong> ${escapeHTML(data.date)}
+          </p>
+        </div>
+
+        <div style="width: 92%; line-height: 1.5; font-size: 19px; color: #1a1a1a; direction: ${data.isFa ? 'rtl' : 'ltr'}; background: rgba(255,255,255,0.7); padding: 25px; border-radius: 15px; margin-bottom: 25px;">
+          ${data.displayBio ? `<p style="margin: 0; white-space: pre-wrap;">${escapeHTML(data.displayBio)}</p>` : ''}
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: center; gap: 20px; margin-top: auto; padding-bottom: 20px;">
+          <img src="${data.qrCodeDataUrl}" style="width: 90px; height: 90px;" />
+          <div style="text-align: left;">
+            <p style="font-size: 16px; color: #111827; font-weight: bold; margin: 0;">${escapeHTML(t('site.title'))}</p>
+            <p style="font-size: 12px; color: #6b7280; margin: 4px 0 0 0;">${escapeHTML(t('site.footerNote'))}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Red Band (Footer) -->
+    <div style="height: 60px; width: 100%; background-color: #da0000;"></div>
+  `;
+}
+
 export async function downloadMemorialPdf(entry: MemorialEntry) {
   const isFa = currentLanguage() === 'fa';
   const displayName = (isFa && entry.name_fa) ? entry.name_fa : entry.name;
@@ -42,46 +95,15 @@ export async function downloadMemorialPdf(entry: MemorialEntry) {
   element.style.overflow = 'hidden';
   element.style.position = 'relative';
 
-  element.innerHTML = `
-    <!-- Top Green Band (Header) -->
-    <div style="height: 60px; width: 100%; background-color: #239f40;"></div>
-
-    <!-- Middle White Band (Main Content) -->
-    <div style="flex: 1; width: 100%; background-color: #ffffff; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 30px 20px; box-sizing: border-box; text-align: center; overflow: hidden;">
-      <!-- Lion Logo Background (Semi-transparent) -->
-      <img src="/lion.png" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; opacity: 0.12; z-index: 0;" />
-      
-      <div style="position: relative; z-index: 1; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; height: 100%; max-height: 100%;">
-        ${entry.media?.photo ? `
-          <div style="margin-bottom: 25px;">
-            <img src="${escapeHTML(entry.media.photo)}" style="width: 280px; height: 280px; object-fit: cover; border-radius: 50%; border: 8px solid #239f40; box-shadow: 0 10px 25px rgba(0,0,0,0.2);" />
-          </div>
-        ` : ''}
-
-        <div style="text-align: center; width: 100%; margin-bottom: 20px;">
-          <h1 style="margin: 0; font-size: 48px; color: #111827; font-weight: 800; line-height: 1.1;">${escapeHTML(displayName)}</h1>
-          <p style="margin: 10px 0; font-size: 24px; color: #374151;">
-            <strong>${escapeHTML(t('details.city'))}:</strong> ${escapeHTML(displayCity)} | <strong>${escapeHTML(t('details.date'))}:</strong> ${escapeHTML(date)}
-          </p>
-        </div>
-        
-        <div style="width: 92%; line-height: 1.5; font-size: 19px; color: #1a1a1a; direction: ${isFa ? 'rtl' : 'ltr'}; background: rgba(255,255,255,0.7); padding: 25px; border-radius: 15px; margin-bottom: 25px;">
-          ${displayBio ? `<p style="margin: 0; white-space: pre-wrap;">${escapeHTML(displayBio)}</p>` : ''}
-        </div>
-
-        <div style="display: flex; align-items: center; justify-content: center; gap: 20px; margin-top: auto; padding-bottom: 20px;">
-          <img src="${qrCodeDataUrl}" style="width: 90px; height: 90px;" />
-          <div style="text-align: left;">
-            <p style="font-size: 16px; color: #111827; font-weight: bold; margin: 0;">${escapeHTML(t('site.title'))}</p>
-            <p style="font-size: 12px; color: #6b7280; margin: 4px 0 0 0;">${escapeHTML(t('site.footerNote'))}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Bottom Red Band (Footer) -->
-    <div style="height: 60px; width: 100%; background-color: #da0000;"></div>
-  `;
+  element.innerHTML = generatePdfHtml({
+    displayName,
+    displayCity,
+    date,
+    displayBio,
+    isFa,
+    photoUrl: entry.media?.photo,
+    qrCodeDataUrl
+  });
 
   const opt = {
     margin: 0,
