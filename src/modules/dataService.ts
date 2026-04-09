@@ -539,16 +539,18 @@ export async function submitMemorial(
 
     if (hasSocialLink && !entry.media?.photo) {
       try {
-        for (const url of candidateUrls) {
+        const extractionPromises = candidateUrls.map(async (url) => {
           const photo = await extractSocialImage(url)
-          if (photo) {
-            if (!entry.media) entry.media = {}
-            entry.media.photo = await normalizePhotoUrl(photo)
-            break
-          }
+          if (!photo) throw new Error('No image extracted')
+          return photo
+        })
+        const photo = await Promise.any(extractionPromises)
+        if (photo) {
+          if (!entry.media) entry.media = {}
+          entry.media.photo = await normalizePhotoUrl(photo)
         }
       } catch {
-        // Silently fail auto-extraction
+        // Silently fail auto-extraction if all promises reject
       }
     }
 
@@ -651,14 +653,21 @@ export async function batchUpdateImages(): Promise<BatchResult> {
         const refs = m.source_links as ReferenceLink[]
         const candidateUrls = getCandidateImageSourceUrls(media, refs)
 
-        for (const url of candidateUrls) {
-          const photo = await extractSocialImage(url)
-
-          if (photo) {
-            const normalizedPhoto = await normalizePhotoUrl(photo)
-            const updatedMedia = { ...media, photo: normalizedPhoto || photo }
-            bulkUpdates.push({ ...m, media: updatedMedia })
-            break
+        if (candidateUrls.length > 0) {
+          try {
+            const extractionPromises = candidateUrls.map(async (url) => {
+              const photo = await extractSocialImage(url)
+              if (!photo) throw new Error('No image extracted')
+              return photo
+            })
+            const photo = await Promise.any(extractionPromises)
+            if (photo) {
+              const normalizedPhoto = await normalizePhotoUrl(photo)
+              const updatedMedia = { ...media, photo: normalizedPhoto || photo }
+              bulkUpdates.push({ ...m, media: updatedMedia })
+            }
+          } catch {
+            // All extractions failed, continue to next target
           }
         }
       }))
