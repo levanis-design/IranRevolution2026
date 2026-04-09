@@ -248,43 +248,55 @@ export async function fetchMemorials(includeUnverified = false): Promise<Memoria
   if (!supabase) return fetchStaticMemorials()
 
   try {
-    let allData: MemorialRow[] = []
-    let page = 0
+    const allData: MemorialRow[] = []
     const pageSize = 1000
-    let hasMore = true
 
     // Public map only needs display fields — skip bio/testimonials/source_links to reduce payload
     const columns = includeUnverified
       ? '*'
       : 'id,name,name_fa,city,city_fa,location,location_fa,date,coords,media,verified'
 
-    while (hasMore) {
-      let query = supabase
+    let countQuery = supabase
+      .from('memorials')
+      .select('*', { count: 'exact', head: true })
+
+    if (!includeUnverified) {
+      countQuery = countQuery.eq('verified', true)
+    }
+
+    const { count, error: countError } = await countQuery
+
+    if (countError) {
+      logger.error('Error fetching count', countError)
+      return fetchStaticMemorials()
+    }
+
+    const totalCount = count || 0
+    if (totalCount === 0) return []
+
+    const totalPages = Math.ceil(totalCount / pageSize)
+    const promises: Promise<{ data: MemorialRow[] | null; error: { message: string; code?: string } | null }>[] = []
+
+    for (let p = 0; p < totalPages; p++) {
+      let pageQuery = supabase
         .from('memorials')
         .select(columns)
-        .range(page * pageSize, (page + 1) * pageSize - 1)
+        .range(p * pageSize, (p + 1) * pageSize - 1)
         .order('date', { ascending: false })
 
       if (!includeUnverified) {
-        query = query.eq('verified', true)
+        pageQuery = pageQuery.eq('verified', true)
       }
+      promises.push(pageQuery as unknown as Promise<{ data: MemorialRow[] | null; error: { message: string; code?: string } | null }>)
+    }
 
-      const { data, error } = await query as { data: MemorialRow[] | null; error: { message: string; code?: string } | null }
+    const results = await Promise.all(promises)
 
+    for (const { data, error } of results) {
       if (error) {
-        if (page === 0) return fetchStaticMemorials()
-        logger.error('Error fetching page', page, error)
-        break
-      }
-
-      if (!data || data.length === 0) {
-        hasMore = false
-      } else {
-        allData = [...allData, ...data]
-        if (data.length < pageSize) {
-          hasMore = false
-        }
-        page++
+        logger.error('Error fetching page concurrently', error)
+      } else if (data) {
+        allData.push(...data)
       }
     }
 
