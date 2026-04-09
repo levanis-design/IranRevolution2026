@@ -183,9 +183,8 @@ export function mergeReferences(
   existingLinks: ReferenceLink[],
   newLinks: ReferenceLink[]
 ): ReferenceLink[] {
-  const urlsToAdd = newLinks.filter(
-    newR => !existingLinks.some(currR => currR.url === newR.url)
-  )
+  const existingUrls = new Set(existingLinks.map(currR => currR.url))
+  const urlsToAdd = newLinks.filter(newR => !existingUrls.has(newR.url))
   return [...existingLinks, ...urlsToAdd]
 }
 
