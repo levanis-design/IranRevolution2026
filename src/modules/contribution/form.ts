@@ -209,27 +209,31 @@ function setupAiAssistant(form: HTMLFormElement, checkDuplicate: (name: string, 
   })
 }
 
+export function extractFormDataToMemorial(fd: FormData): Partial<MemorialEntry> {
+  return {
+    name: fd.get('name') as string,
+    name_fa: fd.get('name_fa') as string || undefined,
+    city: fd.get('city') as string,
+    date: fd.get('date') as string,
+    location: fd.get('location') as string,
+    bio: fd.get('bio') as string,
+    media: {
+      xPost: fd.get('refUrl')?.toString().includes('x.com') || fd.get('refUrl')?.toString().includes('twitter.com')
+        ? fd.get('refUrl') as string
+        : undefined
+    },
+    references: [{
+      label: (fd.get('refLabel') as string) || 'Reference',
+      url: fd.get('refUrl') as string
+    }]
+  }
+}
+
 function setupFormSubmission(form: HTMLFormElement, body: HTMLElement) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
     const fd = new FormData(form)
-    const data: Partial<MemorialEntry> = {
-      name: fd.get('name') as string,
-      name_fa: fd.get('name_fa') as string || undefined,
-      city: fd.get('city') as string,
-      date: fd.get('date') as string,
-      location: fd.get('location') as string,
-      bio: fd.get('bio') as string,
-      media: {
-        xPost: fd.get('refUrl')?.toString().includes('x.com') || fd.get('refUrl')?.toString().includes('twitter.com')
-          ? fd.get('refUrl') as string
-          : undefined
-      },
-      references: [{
-        label: (fd.get('refLabel') as string) || 'Reference',
-        url: fd.get('refUrl') as string
-      }]
-    }
+    const data = extractFormDataToMemorial(fd)
 
     const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement
     submitBtn.disabled = true

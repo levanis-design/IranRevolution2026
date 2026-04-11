@@ -183,9 +183,8 @@ export function mergeReferences(
   existingLinks: ReferenceLink[],
   newLinks: ReferenceLink[]
 ): ReferenceLink[] {
-  const urlsToAdd = newLinks.filter(
-    newR => !existingLinks.some(currR => currR.url === newR.url)
-  )
+  const existingUrls = new Set(existingLinks.map(currR => currR.url))
+  const urlsToAdd = newLinks.filter(newR => !existingUrls.has(newR.url))
   return [...existingLinks, ...urlsToAdd]
 }
 
@@ -248,43 +247,55 @@ export async function fetchMemorials(includeUnverified = false): Promise<Memoria
   if (!supabase) return fetchStaticMemorials()
 
   try {
-    let allData: MemorialRow[] = []
-    let page = 0
+    const allData: MemorialRow[] = []
     const pageSize = 1000
-    let hasMore = true
 
     // Public map only needs display fields — skip bio/testimonials/source_links to reduce payload
     const columns = includeUnverified
       ? '*'
       : 'id,name,name_fa,city,city_fa,location,location_fa,date,coords,media,verified'
 
-    while (hasMore) {
-      let query = supabase
+    let countQuery = supabase
+      .from('memorials')
+      .select('*', { count: 'exact', head: true })
+
+    if (!includeUnverified) {
+      countQuery = countQuery.eq('verified', true)
+    }
+
+    const { count, error: countError } = await countQuery
+
+    if (countError) {
+      logger.error('Error fetching count', countError)
+      return fetchStaticMemorials()
+    }
+
+    const totalCount = count || 0
+    if (totalCount === 0) return []
+
+    const totalPages = Math.ceil(totalCount / pageSize)
+    const promises: Promise<{ data: MemorialRow[] | null; error: { message: string; code?: string } | null }>[] = []
+
+    for (let p = 0; p < totalPages; p++) {
+      let pageQuery = supabase
         .from('memorials')
         .select(columns)
-        .range(page * pageSize, (page + 1) * pageSize - 1)
+        .range(p * pageSize, (p + 1) * pageSize - 1)
         .order('date', { ascending: false })
 
       if (!includeUnverified) {
-        query = query.eq('verified', true)
+        pageQuery = pageQuery.eq('verified', true)
       }
+      promises.push(pageQuery as unknown as Promise<{ data: MemorialRow[] | null; error: { message: string; code?: string } | null }>)
+    }
 
-      const { data, error } = await query as { data: MemorialRow[] | null; error: { message: string; code?: string } | null }
+    const results = await Promise.all(promises)
 
+    for (const { data, error } of results) {
       if (error) {
-        if (page === 0) return fetchStaticMemorials()
-        logger.error('Error fetching page', page, error)
-        break
-      }
-
-      if (!data || data.length === 0) {
-        hasMore = false
-      } else {
-        allData = [...allData, ...data]
-        if (data.length < pageSize) {
-          hasMore = false
-        }
-        page++
+        logger.error('Error fetching page concurrently', error)
+      } else if (data) {
+        allData.push(...data)
       }
     }
 
@@ -501,8 +512,9 @@ export async function submitMemorial(
         if (newRefs.length > 0) {
           const currentRefs = getSourceLinks(existing)
 
+          const currentRefUrls = new Set(currentRefs.map(currR => currR.url))
           const refsToAdd = newRefs.filter(
-            newR => !currentRefs.some(currR => currR.url === newR.url)
+            newR => !currentRefUrls.has(newR.url)
           )
 
           const hasTelegramPost = entry.media?.telegramPost && !(existing.media as Record<string, string> | null)?.telegramPost
@@ -539,16 +551,18 @@ export async function submitMemorial(
 
     if (hasSocialLink && !entry.media?.photo) {
       try {
-        for (const url of candidateUrls) {
+        const extractionPromises = candidateUrls.map(async (url) => {
           const photo = await extractSocialImage(url)
-          if (photo) {
-            if (!entry.media) entry.media = {}
-            entry.media.photo = await normalizePhotoUrl(photo)
-            break
-          }
+          if (!photo) throw new Error('No image extracted')
+          return photo
+        })
+        const photo = await Promise.any(extractionPromises)
+        if (photo) {
+          if (!entry.media) entry.media = {}
+          entry.media.photo = await normalizePhotoUrl(photo)
         }
       } catch {
-        // Silently fail auto-extraction
+        // Silently fail auto-extraction if all promises reject
       }
     }
 
@@ -651,14 +665,21 @@ export async function batchUpdateImages(): Promise<BatchResult> {
         const refs = m.source_links as ReferenceLink[]
         const candidateUrls = getCandidateImageSourceUrls(media, refs)
 
-        for (const url of candidateUrls) {
-          const photo = await extractSocialImage(url)
-
-          if (photo) {
-            const normalizedPhoto = await normalizePhotoUrl(photo)
-            const updatedMedia = { ...media, photo: normalizedPhoto || photo }
-            bulkUpdates.push({ ...m, media: updatedMedia })
-            break
+        if (candidateUrls.length > 0) {
+          try {
+            const extractionPromises = candidateUrls.map(async (url) => {
+              const photo = await extractSocialImage(url)
+              if (!photo) throw new Error('No image extracted')
+              return photo
+            })
+            const photo = await Promise.any(extractionPromises)
+            if (photo) {
+              const normalizedPhoto = await normalizePhotoUrl(photo)
+              const updatedMedia = { ...media, photo: normalizedPhoto || photo }
+              bulkUpdates.push({ ...m, media: updatedMedia })
+            }
+          } catch {
+            // All extractions failed, continue to next target
           }
         }
       }))
@@ -751,13 +772,17 @@ export async function batchTranslateMemorials(): Promise<BatchResult> {
     }
 
     if (updatesToSave.length > 0) {
+      // Create a map for O(1) lookups during normalization
+      const targetMap = new Map<string, MemorialRow>()
+      targets.forEach(t => targetMap.set(t.id, t))
+
       // Normalize objects so they have identical keys to satisfy PostgREST bulk upsert
       const normalizedUpdates = updatesToSave.map(update => {
         const normalized = { ...update }
         allTranslationKeys.forEach(key => {
           if (!(key in normalized)) {
             // Find the original row to get the missing field's current value
-            const originalRow = targets.find(t => t.id === update.id)
+            const originalRow = targetMap.get(update.id!)
             if (originalRow) {
               /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
               (normalized as any)[key] = originalRow[key as keyof MemorialRow]

@@ -58,7 +58,7 @@ async function run() {
 
   let all: any[] = []
   let page = 0
-  let hasMore = true
+  const hasMore = true
   while (hasMore) {
     const { data, error } = await supabase
       .from('memorials')

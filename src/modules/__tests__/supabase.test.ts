@@ -172,3 +172,132 @@ describe('uploadImageToSupabase', () => {
     )
   })
 })
+
+describe('cacheImageFromUrl', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('returns null if url is empty', async () => {
+    const { cacheImageFromUrl } = await import('../supabase')
+    const result = await cacheImageFromUrl('')
+    expect(result).toBeNull()
+  })
+
+  it('returns url if it is already a Supabase storage URL', async () => {
+    const { cacheImageFromUrl } = await import('../supabase')
+    const url = 'https://example.supabase.co/storage/v1/object/public/bucket/image.jpg'
+    const result = await cacheImageFromUrl(url)
+    expect(result).toBe(url)
+  })
+
+  it('returns null and logs error if fetch response is not ok', async () => {
+    const { cacheImageFromUrl } = await import('../supabase')
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found'
+    }))
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const result = await cacheImageFromUrl('http://example.com/not-found.jpg')
+
+    expect(result).toBeNull()
+    expect(consoleSpy).toHaveBeenCalledWith('Image download failed:', 404, 'Not Found', 'http://example.com/not-found.jpg')
+
+    consoleSpy.mockRestore()
+  })
+
+  it('returns null and logs exception if fetch throws an error', async () => {
+    const { cacheImageFromUrl } = await import('../supabase')
+
+    const mockError = new Error('Network timeout')
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(mockError))
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const result = await cacheImageFromUrl('http://example.com/timeout.jpg')
+
+    expect(result).toBeNull()
+    expect(consoleSpy).toHaveBeenCalledWith('Image cache exception:', mockError)
+
+    consoleSpy.mockRestore()
+  })
+
+  it('downloads and uploads the image if fetch is successful', async () => {
+    const { cacheImageFromUrl } = await import('../supabase')
+
+    const mockBuffer = new ArrayBuffer(8)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(mockBuffer)
+    }))
+
+    mockUpload.mockResolvedValueOnce({ error: null })
+    mockGetPublicUrl.mockReturnValueOnce({ data: { publicUrl: 'https://example.supabase.co/storage/v1/object/public/memorial-images/mock-uuid.jpg' } })
+
+    const mockUUID = '123e4567-e89b-12d3-a456-426614174000'
+    vi.stubGlobal('crypto', {
+      randomUUID: () => mockUUID
+    })
+
+    const result = await cacheImageFromUrl('http://example.com/success.jpg')
+
+    expect(result).toBe('https://example.supabase.co/storage/v1/object/public/memorial-images/mock-uuid.jpg')
+    expect(mockUpload).toHaveBeenCalledWith(
+      `${mockUUID}.jpg`,
+      mockBuffer,
+      {
+        contentType: 'image/jpeg',
+        upsert: false
+      }
+    )
+  })
+})
+
+describe('guessImageExtension', () => {
+  it('extracts valid extension from pathname', async () => {
+    const { guessImageExtension } = await import('../supabase')
+    expect(guessImageExtension('https://example.com/image.png')).toBe('png')
+    expect(guessImageExtension('https://example.com/image.webp')).toBe('webp')
+    expect(guessImageExtension('https://example.com/image.gif')).toBe('gif')
+  })
+
+  it('returns jpg when pathname extension is jpg', async () => {
+    const { guessImageExtension } = await import('../supabase')
+    expect(guessImageExtension('https://example.com/image.jpg')).toBe('jpg')
+  })
+
+  it('uses format query parameter when pathname has no extension', async () => {
+    const { guessImageExtension } = await import('../supabase')
+    expect(guessImageExtension('https://example.com/image?format=png')).toBe('png')
+    expect(guessImageExtension('https://example.com/image?format=webp')).toBe('webp')
+  })
+
+  it('normalizes jpeg to jpg in format query parameter', async () => {
+    const { guessImageExtension } = await import('../supabase')
+    expect(guessImageExtension('https://example.com/image?format=jpeg')).toBe('jpg')
+    expect(guessImageExtension('https://example.com/image?format=jpg')).toBe('jpg')
+  })
+
+  it('ignores unsupported format query parameters and defaults to jpg', async () => {
+    const { guessImageExtension } = await import('../supabase')
+    expect(guessImageExtension('https://example.com/image?format=pdf')).toBe('jpg')
+    expect(guessImageExtension('https://example.com/image?format=exe')).toBe('jpg')
+  })
+
+  it('falls back to regex match for invalid URLs that throw during URL parsing', async () => {
+    const { guessImageExtension } = await import('../supabase')
+    expect(guessImageExtension('not-a-valid-url.png')).toBe('png')
+    expect(guessImageExtension('invalid-url.jpg?some=param')).toBe('jpg')
+  })
+
+  it('defaults to jpg when no valid extension or format is found', async () => {
+    const { guessImageExtension } = await import('../supabase')
+    expect(guessImageExtension('https://example.com/image')).toBe('jpg')
+    expect(guessImageExtension('not-a-valid-url-without-extension')).toBe('jpg')
+  })
+})
