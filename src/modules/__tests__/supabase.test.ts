@@ -269,7 +269,6 @@ describe('cacheImageFromUrl', () => {
     expect(mockGetPublicUrl).toHaveBeenCalledWith(`${mockUUID}.jpg`)
   })
 })
-
 describe('guessImageExtension', () => {
   it('extracts valid extension from pathname', async () => {
     const { guessImageExtension } = await import('../supabase')
@@ -278,9 +277,10 @@ describe('guessImageExtension', () => {
     expect(guessImageExtension('https://example.com/image.gif')).toBe('gif')
   })
 
-  it('returns jpg when pathname extension is jpg', async () => {
+  it('returns jpg when pathname extension is jpg or jpeg', async () => {
     const { guessImageExtension } = await import('../supabase')
     expect(guessImageExtension('https://example.com/image.jpg')).toBe('jpg')
+    expect(guessImageExtension('https://example.com/image.jpeg')).toBe('jpg')
   })
 
   it('uses format query parameter when pathname has no extension', async () => {
@@ -304,6 +304,7 @@ describe('guessImageExtension', () => {
   it('falls back to regex match for invalid URLs that throw during URL parsing', async () => {
     const { guessImageExtension } = await import('../supabase')
     expect(guessImageExtension('not-a-valid-url.png')).toBe('png')
+    expect(guessImageExtension('invalid-url.jpeg')).toBe('jpg')
     expect(guessImageExtension('invalid-url.jpg?some=param')).toBe('jpg')
   })
 

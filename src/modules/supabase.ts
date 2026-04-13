@@ -36,7 +36,8 @@ export function guessImageExtension(originalUrl: string): string {
     const pathname = parsed.pathname.toLowerCase()
     const pathMatch = pathname.match(/\.([a-z0-9]{2,5})$/i)
     if (pathMatch) {
-      return pathMatch[1] === 'jpg' ? 'jpg' : pathMatch[1]
+      const ext = pathMatch[1]
+      return ext === 'jpeg' ? 'jpg' : ext
     }
 
     const format = parsed.searchParams.get('format')?.toLowerCase()

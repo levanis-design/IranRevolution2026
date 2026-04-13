@@ -11,7 +11,8 @@ const { mockSupabase, mockSupabaseAdmin } = vi.hoisted(() => ({
 
 vi.mock('../supabase', () => ({
   get supabase() { return mockSupabase.current },
-  get supabaseAdmin() { return mockSupabaseAdmin.current }
+  get supabaseAdmin() { return mockSupabaseAdmin.current },
+  guessImageExtension: vi.fn().mockReturnValue('jpg')
 }))
 
 describe('deleteMemorial', () => {
