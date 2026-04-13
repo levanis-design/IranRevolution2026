@@ -274,7 +274,7 @@ export async function fetchMemorials(includeUnverified = false): Promise<Memoria
     if (totalCount === 0) return []
 
     const totalPages = Math.ceil(totalCount / pageSize)
-    const promises: Promise<{ data: MemorialRow[] | null; error: { message: string; code?: string } | null }>[] = []
+    const promises: Array<PromiseLike<{ data: MemorialRow[] | null; error: { message: string; code?: string } | null }>> = []
 
     for (let p = 0; p < totalPages; p++) {
       let pageQuery = supabase
@@ -286,14 +286,22 @@ export async function fetchMemorials(includeUnverified = false): Promise<Memoria
       if (!includeUnverified) {
         pageQuery = pageQuery.eq('verified', true)
       }
-      promises.push(pageQuery as unknown as Promise<{ data: MemorialRow[] | null; error: { message: string; code?: string } | null }>)
+      promises.push(pageQuery)
     }
 
     const results = await Promise.all(promises)
 
-    for (const { data, error } of results) {
+    for (let i = 0; i < results.length; i++) {
+      const { data, error } = results[i]
+
       if (error) {
-        logger.error('Error fetching page concurrently', error)
+        logger.error(`Error fetching page ${i} concurrently`, error)
+
+        if (i === 0) {
+          return fetchStaticMemorials()
+        }
+
+        break
       } else if (data) {
         allData.push(...data)
       }
@@ -551,18 +559,17 @@ export async function submitMemorial(
 
     if (hasSocialLink && !entry.media?.photo) {
       try {
-        const extractionPromises = candidateUrls.map(async (url) => {
+        for (const url of candidateUrls) {
           const photo = await extractSocialImage(url)
-          if (!photo) throw new Error('No image extracted')
-          return photo
-        })
-        const photo = await Promise.any(extractionPromises)
-        if (photo) {
-          if (!entry.media) entry.media = {}
-          entry.media.photo = await normalizePhotoUrl(photo)
+
+          if (photo) {
+            if (!entry.media) entry.media = {}
+            entry.media.photo = await normalizePhotoUrl(photo)
+            break
+          }
         }
       } catch {
-        // Silently fail auto-extraction if all promises reject
+        // Silently fail auto-extraction
       }
     }
 
@@ -665,22 +672,19 @@ export async function batchUpdateImages(): Promise<BatchResult> {
         const refs = m.source_links as ReferenceLink[]
         const candidateUrls = getCandidateImageSourceUrls(media, refs)
 
-        if (candidateUrls.length > 0) {
-          try {
-            const extractionPromises = candidateUrls.map(async (url) => {
-              const photo = await extractSocialImage(url)
-              if (!photo) throw new Error('No image extracted')
-              return photo
-            })
-            const photo = await Promise.any(extractionPromises)
+        try {
+          for (const url of candidateUrls) {
+            const photo = await extractSocialImage(url)
+
             if (photo) {
               const normalizedPhoto = await normalizePhotoUrl(photo)
               const updatedMedia = { ...media, photo: normalizedPhoto || photo }
               bulkUpdates.push({ ...m, media: updatedMedia })
+              break
             }
-          } catch {
-            // All extractions failed, continue to next target
           }
+        } catch {
+          // Silently continue to the next target if extraction fails
         }
       }))
 

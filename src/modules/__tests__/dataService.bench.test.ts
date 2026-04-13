@@ -17,7 +17,13 @@ vi.mock('../supabase', () => {
   const mockTargets = Array.from({ length: 50 }).map((_, i) => ({
     id: `target-${i}`,
     media: { xPost: `http://x.com/post${i}` },
-    source_links: [],
+    source_links: [
+      { url: 'http://example.com/ref1' },
+      { url: 'http://example.com/ref2' },
+      { url: 'http://example.com/ref3' },
+      { url: 'http://example.com/ref4' },
+      { url: 'http://example.com/ref5' }
+    ],
     name: 'Test',
     city: 'Test City'
   }))
@@ -39,8 +45,7 @@ vi.mock('../supabase', () => {
     get supabaseAdmin() { return null },
     cacheImageFromUrl: vi.fn().mockResolvedValue('http://example.supabase.co/photo.jpg'),
     guessImageExtension: vi.fn().mockReturnValue('jpg'),
-    isSupabaseStorageUrl: vi.fn().mockReturnValue(false),
-    cacheImageFromUrl: vi.fn().mockResolvedValue('http://example.supabase.co/photo.jpg')
+    isSupabaseStorageUrl: vi.fn().mockReturnValue(false)
   }
 })
 
