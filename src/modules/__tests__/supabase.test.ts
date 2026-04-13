@@ -174,67 +174,77 @@ describe('uploadImageToSupabase', () => {
 })
 
 describe('cacheImageFromUrl', () => {
+  let originalEnv: NodeJS.ProcessEnv
+
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.resetModules()
+    originalEnv = { ...process.env }
+
+    process.env.VITE_SUPABASE_URL = 'https://example.supabase.co'
+    process.env.VITE_SUPABASE_ANON_KEY = 'mock-anon-key'
+    process.env.VITE_SUPABASE_SERVICE_ROLE_KEY = 'mock-service-role-key'
+  })
+
+  afterEach(() => {
+    process.env = originalEnv
     vi.unstubAllGlobals()
   })
 
-  it('returns null if url is empty', async () => {
+  it('returns null if url is falsy', async () => {
     const { cacheImageFromUrl } = await import('../supabase')
     const result = await cacheImageFromUrl('')
     expect(result).toBeNull()
   })
 
-  it('returns url if it is already a Supabase storage URL', async () => {
+  it('returns the URL immediately if it is already a Supabase storage URL', async () => {
     const { cacheImageFromUrl } = await import('../supabase')
-    const url = 'https://example.supabase.co/storage/v1/object/public/bucket/image.jpg'
+    const url = 'https://example.supabase.co/storage/v1/object/public/memorial-images/mock.jpg'
     const result = await cacheImageFromUrl(url)
     expect(result).toBe(url)
   })
 
-  it('returns null and logs error if fetch response is not ok', async () => {
+  it('returns null and logs error if the fetch response is not ok', async () => {
     const { cacheImageFromUrl } = await import('../supabase')
-
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
       status: 404,
       statusText: 'Not Found'
-    }))
-
+    })
+    vi.stubGlobal('fetch', fetchMock)
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    const result = await cacheImageFromUrl('http://example.com/not-found.jpg')
+    const result = await cacheImageFromUrl('http://example.com/test.jpg')
 
     expect(result).toBeNull()
-    expect(consoleSpy).toHaveBeenCalledWith('Image download failed:', 404, 'Not Found', 'http://example.com/not-found.jpg')
-
+    expect(fetchMock).toHaveBeenCalledWith('http://example.com/test.jpg', undefined)
+    expect(consoleSpy).toHaveBeenCalledWith('Image download failed:', 404, 'Not Found', 'http://example.com/test.jpg')
     consoleSpy.mockRestore()
   })
 
   it('returns null and logs exception if fetch throws an error', async () => {
     const { cacheImageFromUrl } = await import('../supabase')
-
-    const mockError = new Error('Network timeout')
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(mockError))
-
+    const mockError = new Error('Network error')
+    const fetchMock = vi.fn().mockRejectedValue(mockError)
+    vi.stubGlobal('fetch', fetchMock)
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    const result = await cacheImageFromUrl('http://example.com/timeout.jpg')
+    const result = await cacheImageFromUrl('http://example.com/test.jpg')
 
     expect(result).toBeNull()
+    expect(fetchMock).toHaveBeenCalledWith('http://example.com/test.jpg', undefined)
     expect(consoleSpy).toHaveBeenCalledWith('Image cache exception:', mockError)
-
     consoleSpy.mockRestore()
   })
 
-  it('downloads and uploads the image if fetch is successful', async () => {
+  it('calls uploadImageToSupabase and returns resulting URL on success', async () => {
     const { cacheImageFromUrl } = await import('../supabase')
-
-    const mockBuffer = new ArrayBuffer(8)
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    const arrayBuffer = new ArrayBuffer(8)
+    const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      arrayBuffer: () => Promise.resolve(mockBuffer)
-    }))
+      arrayBuffer: vi.fn().mockResolvedValue(arrayBuffer)
+    })
+    vi.stubGlobal('fetch', fetchMock)
 
     mockUpload.mockResolvedValueOnce({ error: null })
     mockGetPublicUrl.mockReturnValueOnce({ data: { publicUrl: 'https://example.supabase.co/storage/v1/object/public/memorial-images/mock-uuid.jpg' } })
@@ -244,17 +254,19 @@ describe('cacheImageFromUrl', () => {
       randomUUID: () => mockUUID
     })
 
-    const result = await cacheImageFromUrl('http://example.com/success.jpg')
+    const result = await cacheImageFromUrl('http://example.com/test.jpg')
 
     expect(result).toBe('https://example.supabase.co/storage/v1/object/public/memorial-images/mock-uuid.jpg')
+    expect(fetchMock).toHaveBeenCalledWith('http://example.com/test.jpg', undefined)
     expect(mockUpload).toHaveBeenCalledWith(
       `${mockUUID}.jpg`,
-      mockBuffer,
+      expect.any(ArrayBuffer),
       {
         contentType: 'image/jpeg',
         upsert: false
       }
     )
+    expect(mockGetPublicUrl).toHaveBeenCalledWith(`${mockUUID}.jpg`)
   })
 })
 
