@@ -65,6 +65,10 @@ const TWITTER_ACCOUNTS: TwitterAccount[] = [
   {
     username: 'RememberTheirNames',
     enabled: false
+  },
+  {
+    username: 'Vatan_pahlavi',
+    enabled: true
   }
 ];
 
