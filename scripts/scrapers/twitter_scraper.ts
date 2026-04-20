@@ -72,32 +72,59 @@ const TWITTER_ACCOUNTS: TwitterAccount[] = [
   }
 ];
 
-async function fetchTwitterTimeline(username: string, lastTweetId?: string): Promise<string[]> {
-  try {
-    const url = lastTweetId 
-      ? `https://nitter.net/${username}/with_replies` 
-      : `https://nitter.net/${username}`;
-    
-    const readerUrl = `https://r.jina.ai/${url}`;
-    
-    const response = await fetch(readerUrl, {
-      headers: {
-        'X-No-Cache': 'true',
-        'Accept': 'text/plain'
-      }
-    });
+// Nitter instances to try in order (nitter.net is dead)
+const NITTER_INSTANCES = [
+  'nitter.cz',
+  'nitter.net',
+  'nitter.privacydev.net',
+];
 
-    if (!response.ok) {
-      console.error(`Failed to fetch Twitter timeline for @${username}: ${response.statusText}`);
+async function fetchFromNitter(path: string): Promise<string | null> {
+  for (const instance of NITTER_INSTANCES) {
+    try {
+      // Try direct fetch first (Nitter is SSR, no JS needed)
+      const directRes = await fetch(`https://${instance}${path}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+          'Accept': 'text/html',
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (directRes.ok) {
+        const text = await directRes.text();
+        // Skip bot-check pages
+        if (text.includes('tweet-link') || text.includes('/status/')) return text;
+      }
+
+      // Fallback: try via Jina Reader
+      const jinaRes = await fetch(`https://r.jina.ai/https://${instance}${path}`, {
+        headers: { 'X-No-Cache': 'true', 'Accept': 'text/plain' },
+        signal: AbortSignal.timeout(20000),
+      });
+      if (jinaRes.ok) {
+        const text = await jinaRes.text();
+        if (text.includes('/status/') && !text.includes('CAPTCHA')) return text;
+      }
+    } catch {
+      // try next instance
+    }
+  }
+  return null;
+}
+
+async function fetchTwitterTimeline(username: string, _lastTweetId?: string): Promise<string[]> {
+  try {
+    const content = await fetchFromNitter(`/${username}`);
+    if (!content) {
+      console.error(`All Nitter instances failed for @${username}`);
       return [];
     }
 
-    const content = await response.text();
-    
-    const tweetRegex = /https:\/\/nitter\.net\/\w+\/status\/(\d+)/g;
+    // Extract tweet IDs from HTML or Jina Markdown output
+    const tweetRegex = /\/(?:\w+)\/status\/(\d+)/g;
     const matches = [...content.matchAll(tweetRegex)];
     const tweetIds = [...new Set(matches.map(m => m[1]))];
-    
+
     return tweetIds;
   } catch (error) {
     console.error(`Error fetching Twitter timeline for @${username}:`, error);
@@ -107,23 +134,11 @@ async function fetchTwitterTimeline(username: string, lastTweetId?: string): Pro
 
 async function fetchTwitterTweet(tweetId: string): Promise<string | null> {
   try {
-    const url = `https://nitter.net/i/status/${tweetId}`;
-    const readerUrl = `https://r.jina.ai/${url}`;
-    
-    const response = await fetch(readerUrl, {
-      headers: {
-        'X-No-Cache': 'true',
-        'X-With-Generated-Alt': 'true',
-        'Accept': 'text/plain'
-      }
-    });
-
-    if (!response.ok) {
-      console.error(`Failed to fetch tweet ${tweetId}: ${response.statusText}`);
-      return null;
+    const content = await fetchFromNitter(`/i/status/${tweetId}`);
+    if (!content) {
+      console.error(`Failed to fetch tweet ${tweetId} from all Nitter instances`);
     }
-
-    return await response.text();
+    return content;
   } catch (error) {
     console.error(`Error fetching tweet ${tweetId}:`, error);
     return null;
