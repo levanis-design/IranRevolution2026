@@ -112,6 +112,7 @@ function handleImageErrors() {
     if (target && target.tagName === 'IMG') {
       const img = target as HTMLImageElement;
       // Prevent infinite loops if the placeholder itself fails to load
+      // NOTE: /lion.png is intentionally lowercase — matches public/lion.png on Linux (case-sensitive). Do NOT change to /Lion.png.
       const placeholder = '/lion.png';
       const placeholderUrl = new URL(placeholder, window.location.href).href;
       if (img.src !== placeholderUrl) {
