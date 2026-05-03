@@ -23,8 +23,7 @@ export function generatePdfHtml(data: PdfTemplateData): string {
     <!-- Middle White Band (Main Content) -->
     <div style="flex: 1; width: 100%; background-color: #ffffff; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 30px 20px; box-sizing: border-box; text-align: center; overflow: hidden;">
       <!-- Lion Logo Background (Semi-transparent) -->
-      <!-- NOTE: /lion.png is intentionally lowercase — matches public/lion.png on Linux. Do NOT change to /Lion.png. -->
-      <img src="/lion.png" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; opacity: 0.12; z-index: 0;" />
+      <img src="/Lion.png" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; opacity: 0.12; z-index: 0;" />
 
       <div style="position: relative; z-index: 1; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; height: 100%; max-height: 100%;">
         ${data.photoUrl ? `
