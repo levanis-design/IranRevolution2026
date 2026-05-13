@@ -112,8 +112,8 @@ function handleImageErrors() {
     if (target && target.tagName === 'IMG') {
       const img = target as HTMLImageElement;
       // Prevent infinite loops if the placeholder itself fails to load
-      // NOTE: /lion.png is intentionally lowercase — matches public/lion.png on Linux (case-sensitive). Do NOT change to /Lion.png.
-      const placeholder = '/lion.png';
+      // Fallback placeholder
+      const placeholder = '/Lion.png';
       const placeholderUrl = new URL(placeholder, window.location.href).href;
       if (img.src !== placeholderUrl) {
         img.src = placeholderUrl;
@@ -194,7 +194,7 @@ function initListView() {
       return items.map(entry => {
         const displayName = (isFa && entry.name_fa) ? entry.name_fa : entry.name
         const displayCity = (isFa && entry.city_fa) ? entry.city_fa : entry.city
-        const photo = entry.media?.photo || '/lion.png'
+        const photo = entry.media?.photo || '/Lion.png'
         const isSensitive = !!entry.sensitiveMedia
         const srcCount = sourceCount(entry)
 

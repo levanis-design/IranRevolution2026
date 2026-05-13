@@ -10,7 +10,7 @@ Iran Memorial is an interactive, open-source memorial website commemorating indi
 
 ## Known Decisions — Do Not Change
 
-- **`public/lion.png` is lowercase** — The placeholder image is intentionally `lion.png` (lowercase). Code in `src/main.ts` and `src/modules/pdf.ts` correctly references `/lion.png`. Do NOT rename to `Lion.png` or change code references — this would break the site on GitHub Pages (Linux, case-sensitive filesystem).
+- **`public/Lion.png` is uppercase** — The placeholder image is intentionally `Lion.png` (Capital L). Code in `src/main.ts` and `src/modules/pdf.ts` correctly references `/Lion.png`. Do NOT rename to `lion.png` or change code references — this would break the site on GitHub Pages (Linux, case-sensitive filesystem).
 - **Carousel `<img>` tags have no `loading=` attribute** — `src/modules/detailsMedia.ts` carousel slides intentionally omit `loading=`. Adding `loading="lazy"` breaks hidden slides (they never load). Do NOT add loading attributes to carousel images.
 
 ## Development Commands
