@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>In Memory of the Brave | Iranian Freedom Memorial</title>
+  <meta name="description" content="A digital memorial honoring recorded and confirmed victims of the 2026 Iranian uprising." />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-sans@5.2.5/index.min.css">
+  <link rel="stylesheet" href="timeline-styles.css" />
+  <style>
+    .map-memorial-section {
+      max-width: 1600px;
+    }
+
+    .memorial-inline-shell {
+      width: 100%;
+      background: #0f0f0f;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    .memorial-inline-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 300px;
+      grid-template-areas:
+        "flag side"
+        "preview side"
+        "footer side";
+      grid-template-rows: minmax(500px, 1fr) auto auto;
+      gap: 12px 18px;
+      align-items: start;
+      min-height: 500px;
+    }
+
+    .map-memorial-section .flag-section {
+      grid-area: flag;
+      min-height: 500px;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+    }
+
+    .map-memorial-section .flag {
+      width: auto;
+      max-width: 100%;
+      min-height: 500px;
+      height: 100%;
+      aspect-ratio: 1600 / 915;
+      position: relative;
+      overflow: hidden;
+      border-radius: 20px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+      cursor: crosshair;
+      --mouse-x: 50%;
+      --mouse-y: 50%;
+    }
+
+    .map-memorial-section .flag::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 12;
+      pointer-events: none;
+      background: radial-gradient(
+        500px circle at var(--mouse-x) var(--mouse-y),
+        rgba(255,215,120,0.18),
+        rgba(255,215,120,0.08) 20%,
+        transparent 55%
+      );
+      transition: background 0.08s ease;
+    }
+
+    .map-memorial-section .flag::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 13;
+      pointer-events: none;
+      background: radial-gradient(
+        250px circle at var(--mouse-x) var(--mouse-y),
+        rgba(255,255,255,0.08),
+        transparent 60%
+      );
+      mix-blend-mode: screen;
+    }
+
+    .map-memorial-section .stripe {
+      width: 100%;
+      height: 33.333%;
+    }
+
+    .map-memorial-section .green { background: #239f40; }
+    .map-memorial-section .white { background: #ffffff; }
+    .map-memorial-section .red { background: #da0000; }
+
+    .map-memorial-section .grid-overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 20;
+      display: block;
+      background: transparent;
+    }
+
+    .map-memorial-section .emblem {
+      position: absolute;
+      width: 28%;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -47%);
+      z-index: 30;
+      pointer-events: none;
+    }
+
+    .map-memorial-section .emblem img {
+      width: 100%;
+      display: block;
+      filter: drop-shadow(0 2px 10px rgba(0,0,0,0.45));
+    }
+
+    .map-memorial-section .side-info-card {
+      grid-area: side;
+      position: sticky;
+      top: 110px;
+      width: 100%;
+      max-height: calc(100vh - 150px);
+      overflow: auto;
+      background: rgba(15,15,15,0.94);
+      border: 1px solid #e3a018;
+      border-radius: 22px;
+      padding: 16px;
+      color: #f5e6d3;
+      box-shadow: 0 12px 34px rgba(0,0,0,0.55);
+    }
+
+    .map-memorial-section .side-info-image {
+      width: 100%;
+      height: 220px;
+      border-radius: 16px;
+      border: 2px dashed #e3a018;
+      background: #1a1a1a;
+      color: #e3a018;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .map-memorial-section .side-info-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center;
+    }
+
+    .map-memorial-section .side-info-body {
+      margin-top: 12px;
+      text-align: center;
+    }
+
+    .map-memorial-section .side-info-body h2 {
+      color: #e3a018;
+      font-size: 1.1rem;
+      margin-bottom: 4px;
+    }
+
+    .map-memorial-section .side-info-body h3 {
+      color: #f5e6d3;
+      font-size: 0.95rem;
+      direction: ltr;
+      margin-bottom: 8px;
+    }
+
+    .map-memorial-section #sideLocation {
+      color: #d7b56d;
+      font-size: 0.85rem;
+      margin-bottom: 8px;
+    }
+
+    .map-memorial-section #sideDetails {
+      color: #aaa;
+      font-size: 0.8rem;
+      line-height: 1.5;
+    }
+
+    .map-memorial-section .preview-panel {
+      grid-area: preview;
+      background: #111;
+      color: #f2f2f2;
+      border-right: 4px solid #e3a018;
+      border-radius: 18px;
+      padding: 14px 18px;
+      text-align: center;
+    }
+
+    .map-memorial-section .footer-memorial {
+      grid-area: footer;
+      color: #666;
+      text-align: center;
+      font-size: 0.8rem;
+    }
+
+    .map-memorial-section .credits-inner {
+      width: 100%;
+      padding: 20px 0;
+      text-align: center;
+      direction: ltr;
+      color: #888;
+      font-size: 0.85rem;
+      border-top: 1px solid #444;
+      margin-top: 30px;
+    }
+
+    .map-memorial-section .credits-inner p {
+      margin: 4px 0;
+    }
+
+    #tooltip {
+      position: fixed;
+      display: none;
+      background: rgba(15,15,15,0.94);
+      color: #f5e6d3;
+      border-right: 4px solid #e3a018;
+      border-radius: 14px;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      z-index: 10000;
+      pointer-events: none;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+    }
+
+    #modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.88);
+      z-index: 20000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #modal .modal-box {
+      position: relative;
+      width: min(440px, 90vw);
+      background: #111;
+      color: #f5e6d3;
+      border: 1px solid #e3a018;
+      border-radius: 24px;
+      padding: 36px 28px;
+      text-align: center;
+      box-shadow: 0 0 30px rgba(227,160,24,0.35);
+    }
+
+    #modal .modal-box h2 {
+      color: #e3a018;
+      margin-bottom: 8px;
+    }
+
+    #modal .modal-box h3 {
+      color: #f5e6d3;
+      font-size: 1rem;
+      margin-bottom: 8px;
+      direction: ltr;
+    }
+
+    #modal .modal-box p {
+      line-height: 1.7;
+    }
+
+    #modalLocation {
+      color: #d7b56d;
+      margin-bottom: 10px;
+      direction: rtl;
+      line-height: 1.6;
+    }
+
+    #modal .modal-note {
+      margin-top: 16px;
+      color: #aaa;
+    }
+
+    #modal .modal-close {
+      position: absolute;
+      top: 10px;
+      left: 14px;
+      background: none;
+      color: #fff;
+      border: none;
+      font-size: 32px;
+      cursor: pointer;
+    }
+
+    #modal .modal-nav {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: #e3a018;
+      color: #111;
+      border: none;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      font-size: 32px;
+      cursor: pointer;
+      line-height: 1;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    #modal .modal-nav:hover {
+      background: #f0b83a;
+      transform: translateY(-50%) scale(1.08);
+    }
+
+    #modal .modal-nav.prev { right: -22px; }
+    #modal .modal-nav.next { left: -22px; }
+
+    #modalImage {
+      width: 220px;
+      height: 280px;
+      margin: 0 auto 18px auto;
+      border-radius: 18px;
+      border: 2px dashed #e3a018;
+      color: #e3a018;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1a1a1a;
+      font-size: 0.9rem;
+      overflow: hidden;
+    }
+
+    #modalImage img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    #modalImage.has-image {
+      border-style: solid;
+    }
+
+    footer,
+    .footer-content,
+    .footer-brand,
+    .footer-bottom,
+    .footer-copyright {
+      max-width: 100%;
+    }
+
+    .footer-content {
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .footer-brand,
+    .footer-desc,
+    .footer-copyright {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    @media (max-width: 1100px) {
+      .memorial-inline-layout {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+          "flag"
+          "side"
+          "preview"
+          "footer"
+          "credits";
+        grid-template-rows: auto;
+      }
+
+      .map-memorial-section .flag {
+        width: 100%;
+        height: auto;
+      }
+
+      .map-memorial-section .side-info-card {
+        position: static;
+        max-height: none;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .memorial-inline-shell {
+        padding: 16px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .map-memorial-section .side-info-image {
+        height: 180px;
+      }
+
+      #modal .modal-nav.prev { right: 8px; }
+      #modal .modal-nav.next { left: 8px; }
+      #modalImage {
+        width: 160px;
+        height: 220px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header role="banner" aria-label="Site header" class="memorial-header">
+    <nav aria-label="Primary navigation" class="memorial-nav">
+      <div class="logo-area">
+        <img src="./flag.svg" alt="Flag of Iran" class="site-icon" width="42" height="24" />
+        <div class="title-container">
+          <h1 id="site-title">Iran Memorial</h1>
+          <div class="badge-container">
+            <span id="total-count-badge" class="count-badge">Timeline</span>
+          </div>
+        </div>
+      </div>
+      <button id="menu-toggle" class="menu-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div id="nav-controls" class="controls">
+        <div class="control-group">
+          <a href="./index.html" class="nav-button">Map</a>
+        </div>
+        <div class="control-group">
+          <select id="language-select" aria-label="Language selection">
+            <option value="fa">Persian</option>
+            <option value="en" selected>English</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <input id="search-input" type="search" placeholder="Search name, city, story..." aria-label="Search name, city, story" />
+        </div>
+        <div class="control-group">
+          <a href="#map-memorial" id="list-view-btn" class="nav-button">View All</a>
+        </div>
+        <div class="control-group">
+          <a href="./flag.html" id="contribute-btn" class="nav-button">Submit Contribution</a>
+        </div>
+        <div class="control-group">
+          <a href="./timeline.html" class="nav-button current" aria-current="page">Timeline</a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <div class="particles" id="particles"></div>
+
+  <section class="hero" id="home">
+    <div class="hero-bg-pattern"></div>
+    <div class="hero-symbol">
+      <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="50" cy="50" r="45" stroke="#c9a84c" stroke-width="1" opacity="0.3"/>
+        <circle cx="50" cy="50" r="35" stroke="#c9a84c" stroke-width="1" opacity="0.2"/>
+        <path d="M50 20 L50 80" stroke="#c9a84c" stroke-width="1" opacity="0.5"/>
+        <path d="M20 50 L80 50" stroke="#c9a84c" stroke-width="1" opacity="0.5"/>
+        <circle cx="50" cy="50" r="8" fill="#c9a84c" opacity="0.8"/>
+      </svg>
+    </div>
+    <h1 class="hero-title">In Memory of<br><strong>The Brave</strong></h1>
+    <p class="hero-subtitle">Commemorating those who gave everything in the struggle for freedom, dignity, and human rights in Iran.</p>
+    <p class="hero-persian" dir="rtl">Remembering every brave life lost in the struggle for freedom.</p>
+    <div class="hero-cta">
+      <a href="#map-memorial" class="btn btn-filled">View Names</a>
+      <a href="#timeline" class="btn">2026 Timeline</a>
+    </div>
+    <div class="scroll-indicator" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M7 13l5 5 5-5M7 6l5 5 5-5"/>
+      </svg>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="stats-grid">
+      <div class="stat-item fade-in">
+        <div class="stat-number" id="countEstimated" data-target="40000">0</div>
+        <div class="stat-label">Estimated Executed</div>
+      </div>
+      <div class="stat-item fade-in">
+        <div class="stat-number" id="countRecorded" data-target="0">0</div>
+        <div class="stat-label">Names Recorded</div>
+      </div>
+      <div class="stat-item fade-in">
+        <div class="stat-number" id="countConfirmed" data-target="0">0</div>
+        <div class="stat-label">Newly Confirmed</div>
+      </div>
+      <div class="stat-item fade-in">
+        <div class="stat-number" id="countUnconfirmed" data-target="35000" data-suffix="">0</div>
+        <div class="stat-label">Unconfirmed</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="timeline">
+    <div class="section-header fade-in">
+      <p class="section-label">Chronology</p>
+      <h2 class="section-title">A History of Resistance</h2>
+      <div class="section-divider"></div>
+      <p class="section-desc">Key moments in the Iranian people's enduring struggle for freedom and human dignity.</p>
+    </div>
+
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <div class="timeline-date">2025 | The Spark</div>
+          <h3 class="timeline-title">Economic Collapse and Rising Fury</h3>
+          <p class="timeline-text">Protests began peacefully on December 28, 2025, following the closure of Tehran's bazaar due to record currency devaluation and economic despair. Within days, the unrest spread to more than 100 cities nationwide.</p>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <div class="timeline-date">January 8-9, 2026 | The Massacres</div>
+          <h3 class="timeline-title">The Bloodiest Days</h3>
+          <p class="timeline-text">Over 48 hours, Iranian security forces carried out organized massacres of protesters. Hospitals were overwhelmed, with at least 217 killed in Tehran alone on January 8. A nationwide internet blackout concealed the true scale.</p>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <div class="timeline-date">January 2026 | The Crimson Winter</div>
+          <h3 class="timeline-title">30,000+ Dead</h3>
+          <p class="timeline-text">The crackdown escalated with live ammunition, snipers, heavy weapons, and mass graves. Families were denied truth, mourning, and justice as the death toll continued to rise.</p>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <div class="timeline-date">February 2026 | The Reckoning</div>
+          <h3 class="timeline-title">Confessions and Denials</h3>
+          <p class="timeline-text">Officials acknowledged only a fraction of the dead while human rights groups documented far higher numbers. The names gathered here resist that erasure.</p>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <div class="timeline-date">Ongoing | The Struggle Continues</div>
+          <h3 class="timeline-title">We Will Never Forget</h3>
+          <p class="timeline-text">The courage of those who stood against tyranny continues to inspire the Iranian diaspora and freedom-loving people worldwide. Their names live on in memory.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="quote-section">
+    <div class="fade-in">
+      <div class="quote-mark">"</div>
+      <p class="quote-text">They tried to bury us. They did not know we were seeds.</p>
+      <div class="quote-author">Iranian proverb</div>
+      <div class="quote-author-persian" dir="rtl">Their memory grows wherever courage survives.</div>
+    </div>
+  </section>
+
+  <section class="section map-memorial-section" id="map-memorial">
+    <div class="section-header fade-in">
+      <p class="section-label">Memorial</p>
+      <h2 class="section-title">40,000 Names</h2>
+      <div class="section-divider"></div>
+      <p class="section-desc">
+        Explore the interactive memorial from the original flag map project.
+      </p>
+    </div>
+
+    <div class="memorial-inline-shell fade-in">
+      <div class="memorial-inline-layout">
+        <aside id="sideInfoCard" class="side-info-card">
+          <div id="sideInfoImage" class="side-info-image">Image</div>
+          <div class="side-info-body">
+            <h2 id="sideNameFa">Persian Name</h2>
+            <h3 id="sideNameEn">English Name</h3>
+            <p id="sideLocation">Location</p>
+            <p id="sideDetails">Move across the flag to explore each recorded life.</p>
+          </div>
+        </aside>
+
+        <section class="flag-section" aria-label="Interactive memorial">
+          <div class="flag" id="flagContainer" aria-label="Interactive memorial flag">
+            <div class="stripe green"></div>
+            <div class="stripe white"></div>
+            <div class="stripe red"></div>
+
+            <canvas
+              id="interactiveGridCanvas"
+              class="grid-overlay"
+              aria-label="Interactive memorial grid"
+            ></canvas>
+
+            <div class="emblem" aria-hidden="true">
+              <img
+                src="./lion-sun-emblem.png"
+                alt="Lion and Sun emblem"
+                id="lionSunImg"
+              />
+            </div>
+          </div>
+        </section>
+
+        <div id="previewPanel" class="preview-panel">
+          Move across the flag. Each square represents one life.
+        </div>
+
+        <div class="footer-memorial">
+          40,000 squares = 40,000 lives | Click a square to open the details
+        </div>
+      </div>
+    </div>
+
+    <div class="credits-inner">
+      <p><strong>Design and Idea:</strong> Kimiya Khosravani</p>
+      <p><strong>Execution:</strong> Levani Sidiani</p>
+    </div>
+  </section>
+
+  <div id="tooltip" class="tooltip" role="status" aria-live="polite"></div>
+
+  <div id="modal" class="modal" aria-hidden="true">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-label="Memorial details">
+      <button id="closeModal" class="modal-close" aria-label="Close">×</button>
+      <button id="prevPerson" class="modal-nav prev" aria-label="Previous">‹</button>
+      <button id="nextPerson" class="modal-nav next" aria-label="Next">›</button>
+
+      <div id="modalImage">Image</div>
+      <h2 id="modalNameFa"></h2>
+      <h3 id="modalNameEn"></h3>
+      <p id="modalLocation" class="dual-location"></p>
+      <p id="modalDetails"></p>
+      <p class="modal-note">Their memory remains with us.</p>
+    </div>
+  </div>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-brand">
+        <div class="footer-logo">Iranian Freedom Memorial</div>
+        <p class="footer-desc">A digital monument dedicated to preserving the memory of those who fought and sacrificed for a free and democratic Iran. Their courage lights the path forward.</p>
+      </div>
+      <div>
+        <h4 class="footer-heading">Navigate</h4>
+        <ul class="footer-links">
+          <li><a href="./index.html">Map</a></li>
+          <li><a href="#timeline">Timeline</a></li>
+          <li><a href="#map-memorial">40,000 Names</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="footer-heading">Resources</h4>
+        <ul class="footer-links">
+          <li><a href="#map-memorial">Interactive Memorial</a></li>
+          <li><a href="#timeline">2026 Timeline</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p class="footer-copyright">&copy; 2026 Iranian Freedom Memorial. Built by the people, for the people.</p>
+    </div>
+  </footer>
+
+  <script src="timeline.js"></script>
+  <script src="flag.js"></script>
+</body>
+</html>

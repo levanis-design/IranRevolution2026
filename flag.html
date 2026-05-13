@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>۴۰,۰۰۰ نام | یادمان آزادی ایران ۱۴۰۵</title>
+
+  <meta
+    name="description"
+    content="یادمان تعاملی برای ۴۰,۰۰۰ جان از دست رفته؛ هر مربع نمایانگر یک نام است."
+  />
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+  <div class="memorial-wrapper">
+
+    <header class="memorial-header">
+      <h1>۴۰,۰۰۰ نام — قیام سراسری ایران ۱۴۰۵</h1>
+      <div class="sub">
+        پرچم شیر و خورشید نماد آزادی | زن، زندگی، آزادی
+      </div>
+    </header>
+
+    <main>
+
+<aside id="sideInfoCard" class="side-info-card">
+  <div id="sideInfoImage" class="side-info-image">تصویر</div>
+  <div class="side-info-body">
+    <h2 id="sideNameFa">نام فارسی</h2>
+    <h3 id="sideNameEn">English Name</h3>
+    <p id="sideLocation">محل</p>
+    <p id="sideDetails">برای مشاهده، روی یکی از مربع‌ها حرکت کنید</p>
+  </div>
+</aside>
+
+      <section class="flag-section" aria-label="یادمان تعاملی">
+        <div class="flag" id="flagContainer" aria-label="پرچم یادمان تعاملی">
+
+          <div class="stripe green"></div>
+          <div class="stripe white"></div>
+          <div class="stripe red"></div>
+
+          <canvas
+            id="interactiveGridCanvas"
+            class="grid-overlay"
+            aria-label="شبکه تعاملی یادمان"
+          ></canvas>
+
+          <div class="emblem" aria-hidden="true">
+            <img
+              src="./lion-sun-emblem.png"
+              alt="نشان شیر و خورشید"
+              id="lionSunImg"
+            />
+          </div>
+
+        </div>
+      </section>
+
+      <div id="previewPanel" class="preview-panel">
+        موس را روی پرچم حرکت دهید — هر مربع نمایانگر یک جان از دست رفته است
+      </div>
+
+      <div class="footer-memorial">
+        ۴۰,۰۰۰ مربع = ۴۰,۰۰۰ جان | برای مشاهده جزئیات روی مربع کلیک کنید
+      </div>
+
+  <div class="credits-inner">
+    <p><strong>Design and Idea:</strong> Kimiya Khosravani</p>
+    <p><strong>Execution:</strong> Levani Sidiani</p>
+  </div>
+
+    </main>
+
+  </div>
+
+  <div id="tooltip" class="tooltip" role="status" aria-live="polite"></div>
+
+  <div id="modal" class="modal" aria-hidden="true">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-label="جزئیات نام">
+
+      <button id="closeModal" class="modal-close" aria-label="بستن">×</button>
+      <button id="prevPerson" class="modal-nav prev" aria-label="قبلی">‹</button>
+      <button id="nextPerson" class="modal-nav next" aria-label="بعدی">›</button>
+
+      <div class="modal-image-placeholder" id="modalImage">
+        تصویر
+      </div>
+
+      <h2 id="modalNameFa"></h2>
+      <h3 id="modalNameEn"></h3>
+      <p id="modalLocation" class="dual-location"></p>
+      <p id="modalDetails"></p>
+      <p class="modal-note">یاد و نام او گرامی</p>
+
+    </div>
+  </div>
+<footer class="site-credits">
+
+</footer>
+  <script src="flag.js"></script>
+
+</body>
+</html>

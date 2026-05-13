@@ -3,56 +3,71 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Interactive memorial website honoring individuals in Iran who lost their lives during the revolution. Community-moderated and open-source." />
-    <meta name="keywords" content="Iran Memorial, Iran Revolution 2026, victims, human rights, interactive map, memorial" />
+    <meta
+      name="description"
+      content="Interactive memorial website honoring individuals in Iran who lost their lives during the revolution. Community-moderated and open-source."
+    />
+    <meta
+      name="keywords"
+      content="Iran Memorial, Iran Revolution 2026, victims, human rights, interactive map, memorial"
+    />
     <meta name="author" content="Iran Memorial Community" />
     <meta name="robots" content="index, follow" />
 
-    <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://iranrevolution.online/" />
     <meta property="og:title" content="Iran Memorial - Honoring the Revolution's Victims" />
-    <meta property="og:description" content="Interactive memorial website honoring individuals in Iran who lost their lives during the revolution." />
+    <meta
+      property="og:description"
+      content="Interactive memorial website honoring individuals in Iran who lost their lives during the revolution."
+    />
     <meta property="og:image" content="https://iranrevolution.online/flag.png" />
     <meta property="og:image:width" content="640" />
     <meta property="og:image:height" content="360" />
 
-    <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image" />
     <meta property="twitter:url" content="https://iranrevolution.online/" />
     <meta property="twitter:title" content="Iran Memorial - Honoring the Revolution's Victims" />
-    <meta property="twitter:description" content="Interactive memorial website honoring individuals in Iran who lost their lives during the revolution." />
+    <meta
+      property="twitter:description"
+      content="Interactive memorial website honoring individuals in Iran who lost their lives during the revolution."
+    />
     <meta property="twitter:image" content="https://iranrevolution.online/flag.png" />
 
-    <!-- Canonical Link -->
     <link rel="canonical" href="https://iranrevolution.online/" />
 
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https:; media-src 'self' https://*.cdninstagram.com https://*.supabase.co; style-src 'self' 'unsafe-inline' https://platform.twitter.com https://fonts.googleapis.com; script-src 'self' https://platform.twitter.com https://www.instagram.com https://instagram.com; frame-src https://platform.twitter.com https://syndication.twitter.com https://www.instagram.com https://instagram.com https://t.me; connect-src 'self' https://r.jina.ai https://openrouter.ai https://*.supabase.co wss://*.supabase.co https://www.instagram.com; font-src 'self' https://fonts.gstatic.com;" />
-    <link rel="icon" type="image/png" href="/flag.png" />
-    <link rel="apple-touch-icon" href="/flag.png" />
-    
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data: https:; media-src 'self' https://*.cdninstagram.com https://*.supabase.co; style-src 'self' 'unsafe-inline' https://platform.twitter.com https://fonts.googleapis.com; script-src 'self' https://platform.twitter.com https://www.instagram.com https://instagram.com; frame-src https://platform.twitter.com https://syndication.twitter.com https://www.instagram.com https://instagram.com https://t.me; connect-src 'self' https://r.jina.ai https://openrouter.ai https://*.supabase.co wss://*.supabase.co https://www.instagram.com; font-src 'self' https://fonts.gstatic.com;"
+    />
+    <link rel="icon" type="image/png" href="./flag.png" />
+    <link rel="apple-touch-icon" href="./flag.png" />
+
     <title>Iran Memorial | Honoring the Victims of the Revolution</title>
 
     <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      "name": "Iran Memorial",
-      "url": "https://iranrevolution.online/",
-      "description": "Interactive memorial website honoring individuals in Iran who lost their lives during the revolution.",
-      "potentialAction": {
-        "@type": "SearchAction",
-        "target": "https://iranrevolution.online/?search={search_term_string}",
-        "query-input": "required name=search_term_string"
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Iran Memorial",
+        "url": "https://iranrevolution.online/",
+        "description": "Interactive memorial website honoring individuals in Iran who lost their lives during the revolution.",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://iranrevolution.online/?search={search_term_string}",
+          "query-input": "required name=search_term_string"
+        }
       }
-    }
     </script>
+    <script type="module" crossorigin src="./assets/main-1YKmyBWn.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/domUtils-DLeEeqJA.js">
+    <link rel="stylesheet" crossorigin href="./assets/main-2JKEvMmv.css">
   </head>
   <body>
     <header role="banner" aria-label="Site header">
       <nav aria-label="Primary navigation">
         <div class="logo-area">
-          <img src="/flag.svg" alt="Flag of Iran" class="site-icon" width="42" height="24" />
+          <img src="./flag.svg" alt="Flag of Iran" class="site-icon" width="42" height="24" />
           <div class="title-container">
             <h1 id="site-title">Iran Memorial</h1>
             <div class="badge-container">
@@ -68,19 +83,30 @@
         </button>
         <div id="nav-controls" class="controls">
           <div class="control-group">
+            <a href="./index.html" class="nav-button current" aria-current="page">Map</a>
+          </div>
+          <div class="control-group">
             <select id="language-select" aria-label="Language selection">
-              <option value="fa">فارسی</option>
+              <option value="fa">Persian</option>
               <option value="en" selected>English</option>
             </select>
           </div>
           <div class="control-group">
-            <input id="search-input" type="search" placeholder="Search victims..." aria-label="Search" />
+            <input
+              id="search-input"
+              type="search"
+              placeholder="Search name, city, story..."
+              aria-label="Search name, city, story"
+            />
           </div>
           <div class="control-group">
-            <button id="list-view-btn" class="nav-button">List View</button>
+            <a href="./timeline.html" class="nav-button">Timeline</a>
           </div>
           <div class="control-group">
-            <button id="contribute-btn" class="nav-button">Contribute</button>
+            <button id="list-view-btn" class="nav-button">View All</button>
+          </div>
+          <div class="control-group">
+            <button id="contribute-btn" class="nav-button">Submit Contribution</button>
           </div>
         </div>
       </nav>
@@ -113,6 +139,5 @@
       <a href="./privacy.html" id="privacy-link">Privacy</a>
       <a href="https://github.com/atakhadiviom/IranRevolution2026" rel="noopener" target="_blank" id="github-link">GitHub</a>
     </footer>
-    <script type="module" src="./src/main.ts"></script>
   </body>
 </html>
